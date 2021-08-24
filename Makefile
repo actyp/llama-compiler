@@ -13,16 +13,6 @@ llama: sanity
 	$(OCB) Main.native
 	@mv Main.native llama
 
-llama_lex: sanity
-	@echo --------Compiling llama_lex-------
-	$(OCB) Main_lex.native
-	@mv Main_lex.native llama_lex
-
-llama_parse: sanity
-	@echo --------Compiling llama_parse-----
-	$(OCB) Main_parse.native
-	@mv Main_parse.native llama_parse
-
 sanity:
 	@echo --------Sanity Check--------
 	@echo Ocamlbuild Path: `which ocamlbuild`
