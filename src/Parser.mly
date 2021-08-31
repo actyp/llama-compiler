@@ -130,7 +130,7 @@
 %type <Ast.tdec> tdef
 %type <Ast.constr> constr
 %type <Ast._type> _type
-%type <Ast.base_expr> base_expr
+%type <Ast.expr> base_expr
 %type <Ast.expr> expr
 %type <Ast.count_dir> count
 %type <Ast.unop> unop
@@ -158,16 +158,16 @@ letdef:
 ;
 
 def:
-  | ID; option(COLON _type { $2 }); STR_EQUAL; expr       { Ast.ConstVarDec {name = Symbol.symbol($1); ty_opt = $2; value = $4; pos = $startofs($1)} }
-  | ID; par+; option(COLON _type { $2 }); STR_EQUAL; expr { Ast.FunctionDec {name = Symbol.symbol($1); params = $2; result_ty_opt = $3; body = $5; pos = $startofs($1)} }
-  | MUTABLE; ID; option(COLON _type { $2 })               { Ast.MutVarDec   {name = Symbol.symbol($2); ty_opt = $3; pos = $startofs($2)} }
+  | ID; option(COLON _type { $2 }); STR_EQUAL; expr       { Ast.ConstVarDec {name_sym = Symbol.symbol($1); ty_opt = $2; value = $4; pos = $startofs($1)} }
+  | ID; par+; option(COLON _type { $2 }); STR_EQUAL; expr { Ast.FunctionDec {name_sym = Symbol.symbol($1); params = $2; result_ty_opt = $3; body = $5; pos = $startofs($1)} }
+  | MUTABLE; ID; option(COLON _type { $2 })               { Ast.MutVarDec   {name_sym = Symbol.symbol($2); ty_opt = $3; pos = $startofs($2)} }
   | MUTABLE; ID; LBRACKET; expr; list(COMMA expr { $2 }); RBRACKET; option(COLON _type { $2 })
-                                                          { Ast.ArrayDec {name = Symbol.symbol($2); dims = $4 :: $5; ty_opt = $7; pos = $startofs($2) } }
+                                                          { Ast.ArrayDec {name_sym = Symbol.symbol($2); dims = $4 :: $5; ty_opt = $7; pos = $startofs($2) } }
 ;
 
 par:
-  | ID                            { Ast.Param({name = Symbol.symbol($1); ty_opt = None;    pos = $startofs($1)}) }
-  | LPAREN ID COLON _type RPAREN  { Ast.Param({name = Symbol.symbol($2); ty_opt = Some $4; pos = $startofs($2)}) }
+  | ID                            { Ast.Param {name_sym = Symbol.symbol($1); ty_opt = None;    pos = $startofs($1)} }
+  | LPAREN ID COLON _type RPAREN  { Ast.Param {name_sym = Symbol.symbol($2); ty_opt = Some $4; pos = $startofs($2)} }
 ;
 
 typedef:
@@ -175,48 +175,52 @@ typedef:
 ;
 
 tdef:
-  ID; STR_EQUAL; constr; list(BAR constr { $2 }) { Ast.TypeDec {name = Symbol.symbol($1); constrs = $3 :: $4; pos = $startofs($1)} }
+  ID; STR_EQUAL; constr; list(BAR constr { $2 }) { Ast.TypeDec {name_sym = Symbol.symbol($1); constrs = $3 :: $4; pos = $startofs($1)} }
 ;
 
 constr:
-  CID; option(OF; _type+ { $2 }) { Ast.Constr {name = Symbol.symbol($1); tys_opt = $2; pos = $startofs($1)} }
+  CID; option(OF; _type+ { $2 }) { Ast.Constr {name_sym = Symbol.symbol($1); tys_opt = $2; pos = $startofs($1)} }
 ;
 
 _type:
-  | UNIT                   { Ast.TY_BASIC({ty = Symbol.symbol("UNIT");  pos = $startofs($1)}) }
-  | TYPE_INT               { Ast.TY_BASIC({ty = Symbol.symbol("INT");   pos = $startofs($1)}) }
-  | TYPE_CHAR              { Ast.TY_BASIC({ty = Symbol.symbol("CHAR");  pos = $startofs($1)}) }
-  | BOOL                   { Ast.TY_BASIC({ty = Symbol.symbol("BOOL");  pos = $startofs($1)}) }
-  | TYPE_FLOAT             { Ast.TY_BASIC({ty = Symbol.symbol("FLOAT"); pos = $startofs($1)}) }
+  | UNIT                   { Ast.TY_BASIC {ty_sym = Symbol.symbol("UNIT");  pos = $startofs($1)} }
+  | TYPE_INT               { Ast.TY_BASIC {ty_sym = Symbol.symbol("INT");   pos = $startofs($1)} }
+  | TYPE_CHAR              { Ast.TY_BASIC {ty_sym = Symbol.symbol("CHAR");  pos = $startofs($1)} }
+  | BOOL                   { Ast.TY_BASIC {ty_sym = Symbol.symbol("BOOL");  pos = $startofs($1)} }
+  | TYPE_FLOAT             { Ast.TY_BASIC {ty_sym = Symbol.symbol("FLOAT"); pos = $startofs($1)} }
   | LPAREN _type RPAREN    { $2 }
-  | _type GIVES _type      { Ast.TY_FUNC({param_tys = [$1; $3]; pos = $startofs($1)}) }
-  | _type REF              { Ast.TY_REF({ty = $1; pos = $startofs($1)}) }
+  | _type GIVES _type      { Ast.TY_FUNC {param_tys = [$1; $3]; pos = $startofs($1)} }
+  | _type REF              { Ast.TY_REF {ty = $1; pos = $startofs($1)} }
   | ARRAY; option(LBRACKET; TIMES; list(COMMA TIMES { () }); RBRACKET { 1 + List.length $3 }); OF; _type
-                           { Ast.TY_ARRAY({dims_num_opt = $2; ty = $4; pos = $startofs($4)}) }
-  | ID                     { Ast.TY_ID({ty = Symbol.symbol($1); pos = $startofs($1)}) }
+                           { Ast.TY_ARRAY {dims_num_opt = $2; ty = $4; pos = $startofs($4)} }
+  | ID                     { Ast.TY_ID {ty_sym = Symbol.symbol($1); pos = $startofs($1)} }
 ;
 
 base_expr:
-  | ID                                                    { Ast.BE_ID       {name = Symbol.symbol($1); pos = $startofs($1)} }
-  | CID                                                   { Ast.BE_CID      {name = Symbol.symbol($1); pos = $startofs($1)} }
-  | INT                                                   { Ast.BE_Int      {value = $1; pos = $startofs($1)} }
-  | FLOAT                                                 { Ast.BE_Float    {value = $1; pos = $startofs($1)} }
-  | CHAR                                                  { Ast.BE_Char     {value = $1; pos = $startofs($1)} }
-  | STRING                                                { Ast.BE_String   {value = $1; pos = $startofs($1)} }
-  | TRUE                                                  { Ast.BE_True     $startofs($1) }
-  | FALSE                                                 { Ast.BE_False    $startofs($1) }
-  | EXCLAMATION_MARK; base_expr                           { Ast.BE_Deref    {base_expr = $2; pos = $startofs($1)} }
-  | LPAREN RPAREN                                         { Ast.BE_Empty    $startofs($1) }
-  | ID; LBRACKET; expr; list(COMMA expr { $2 }); RBRACKET { Ast.BE_ArrayRef {exprs = $3 :: $4; pos = $startofs($1)} }
-  | LPAREN; expr; RPAREN                                  { Ast.BE_Nested   {expr = $2; pos = $startofs($1)} }
+  | ID                                                       { Ast.E_ID       {name_sym = Symbol.symbol($1); pos = $startofs($1)} }
+  | CID                                                      { Ast.E_CID      {name_sym = Symbol.symbol($1); pos = $startofs($1)} }
+  | INT                                                      { Ast.E_Int      {value = $1; pos = $startofs($1)} }
+  | FLOAT                                                    { Ast.E_Float    {value = $1; pos = $startofs($1)} }
+  | CHAR                                                     { Ast.E_Char     {value = $1; pos = $startofs($1)} }
+  | STRING                                                   { Ast.E_String   {value = $1; pos = $startofs($1)} }
+  | TRUE                                                     { Ast.E_True     $startofs($1) }
+  | FALSE                                                    { Ast.E_False    $startofs($1) }
+  | LPAREN RPAREN                                            { Ast.E_Unit     $startofs($1) }
+  | ID; LBRACKET; expr; list(COMMA expr { $2 }); RBRACKET    { Ast.E_ArrayRef {exprs = $3 :: $4; pos = $startofs($1)} }
+  | LPAREN; expr; RPAREN                                     { $2 }
+;
+
+par_expr:
+  | base_expr                                                { $1 }
+  | EXCLAMATION_MARK; base_expr                              { Ast.E_Unop {unop = Ast.UN_DEREF; expr = $2; pos = $startofs($1)} }
 ;
 
 expr:
   | unop expr %prec UN                                       { Ast.E_Unop         {unop = $1; expr = $2; pos = $startofs($1)} }
   | expr binop expr                                          { Ast.E_Binop        {left_expr = $1; binop = $2; right_expr = $3; pos = $startofs($1)} }
-  | ID; base_expr+                                           { Ast.E_ID_BES       {id = Symbol.symbol($1); base_exprs = $2; pos = $startofs($1)} }
-  | CID; base_expr+                                          { Ast.E_CID_BES      {cid = Symbol.symbol($1); base_exprs = $2; pos = $startofs($1)} }
-  | DIM; INT?; ID                                            { Ast.E_ArrayDim     {dim = $2; array_name = Symbol.symbol($3); pos = $startofs($1)} }
+  | ID; par_expr+                                            { Ast.E_FuncCall     {name_sym = Symbol.symbol($1); param_exprs = $2; pos = $startofs($1)} }
+  | CID; par_expr+                                           { Ast.E_ConstrCall   {name_sym = Symbol.symbol($1); param_exprs = $2; pos = $startofs($1)} }
+  | DIM; INT?; ID                                            { Ast.E_ArrayDim     {dim = $2; array_name_sym = Symbol.symbol($3); pos = $startofs($1)} }
   | NEW; _type                                               { Ast.E_New          {ty = $2; pos = $startofs($1)} }
   | DELETE; expr                                             { Ast.E_Delete       {expr = $2; pos = $startofs($1)} }
   | letdef; IN; expr                                         { Ast.E_LetIn        {letdef = $1; in_expr = $3; pos = $startofs($2)} }
@@ -224,9 +228,9 @@ expr:
   | IF; expr; THEN; expr; ELSE; expr                         { Ast.E_MatchedIF    {if_expr = $2; then_expr = $4; else_expr = $6; pos = $startofs($1)} }
   | IF; expr; THEN; expr %prec UIF                           { Ast.E_UnmatchedIF  {if_expr = $2; then_expr = $4; pos = $startofs($1)} }
   | WHILE; expr; DO; expr; DONE                              { Ast.E_WhileDoDone  {while_expr = $2; do_expr = $4; pos = $startofs($1)} }
-  | FOR; ID; STR_EQUAL; expr; count; expr; DO; expr; DONE    { Ast.E_ForDoDone    {count_var = Symbol.symbol($2); start_expr = $4; count_dir = $5; end_expr = $6; do_expr = $8; pos = $startofs($1)} }
+  | FOR; ID; STR_EQUAL; expr; count; expr; DO; expr; DONE    { Ast.E_ForDoDone    {count_var_sym = Symbol.symbol($2); start_expr = $4; count_dir = $5; end_expr = $6; do_expr = $8; pos = $startofs($1)} }
   | MATCH; expr; WITH; clause; list(BAR; clause { $2 }); END { Ast.E_MatchWithEnd {match_expr = $2; with_clauses = $4 :: $5; pos = $startofs($1)} }
-  | base_expr                                                { Ast.E_BaseExpr     {base_expr = $1; pos = $startofs($1)} }
+  | base_expr                                                { $1 }
 ;
 
 count:
@@ -283,12 +287,12 @@ base_pattern:
   | CHAR                         { Ast.BP_CHAR {chr = $1; pos = $startofs($1)} }
   | TRUE                         { Ast.BP_TRUE $startofs($1) }
   | FALSE                        { Ast.BP_FALSE $startofs($1) }
-  | ID                           { Ast.BP_ID {id = Symbol.symbol($1); pos = $startofs($1)} }
-  | CID                          { Ast.BP_CID {cid = Symbol.symbol($1); pos = $startofs($1)} }
-  | LPAREN; base_pattern; RPAREN { Ast.BP_NESTED {base_pattern = $2; pos = $startofs($1)} }
+  | ID                           { Ast.BP_ID {name_sym = Symbol.symbol($1); pos = $startofs($1)} }
+  | CID                          { Ast.BP_CID {name_sym = Symbol.symbol($1); pos = $startofs($1)} }
+  | LPAREN; base_pattern; RPAREN { $2 }
 ;
 
 constr_pattern:
   | CID; base_pattern+             { Ast.CP_BASIC  {constr_sym = Symbol.symbol($1); base_patterns = $2; pos = $startofs($1)} }
-  | LPAREN; constr_pattern; RPAREN { Ast.CP_NESTED {constr_pattern = $2; pos = $startofs($1)} }
+  | LPAREN; constr_pattern; RPAREN { $2 }
 ;
