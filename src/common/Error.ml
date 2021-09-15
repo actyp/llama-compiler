@@ -13,13 +13,20 @@ let flagWarnings = ref true
 let numWarnings = ref 0
 let maxWarnings = ref 200
 
+type lpos = Lexing.position
+
+let pp_lpos ppf (lpos: lpos) = match lpos with
+  { pos_fname; pos_lnum; pos_bol; pos_cnum; } ->
+    fprintf ppf "{pos_fname = \"%s\"; pos_lnum = %d; pos_bol = %d; pos_cnum = %d}"
+      pos_fname pos_lnum pos_bol pos_cnum
+
 type position =
-    PosPoint   of Lexing.position
-  | PosContext of Lexing.position * Lexing.position
+    PosPoint   of lpos
+  | PosContext of lpos * lpos
   | PosDummy
 
 let position_point lpos = PosPoint lpos
-let position_context lpos_start lpos_end = PosContext (lpos_start, lpos_end)
+let position_context (lpos_start, lpos_end) = PosContext (lpos_start, lpos_end)
 let position_dummy = PosDummy
 
 let print_position ppf pos =

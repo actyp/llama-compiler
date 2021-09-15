@@ -2,7 +2,7 @@
 
 default: llama
 
-OCB_FLAGS = -use-ocamlfind -use-menhir -I src
+OCB_FLAGS = -use-ocamlfind -use-menhir -Is src,src/parsing,src/semant,src/common
 OCB = ocamlbuild $(OCB_FLAGS)
 
 clean:
@@ -17,3 +17,4 @@ sanity:
 	@echo --------Sanity Check--------
 	@echo Ocamlbuild Path: `which ocamlbuild`
 	@echo Menhir Path: `which menhir`
+	@echo ppx_deriving package: `opam show ppx_deriving | grep 'version '`

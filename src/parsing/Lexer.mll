@@ -3,7 +3,7 @@ open Lexing
 open Parser
 
 let print_position lexbuf =
-  Error.print_position (Format.err_formatter) (Error.PosContext (lexbuf.lex_start_p, lexbuf.lex_curr_p) )
+  Error.print_position (Format.err_formatter) (Error.PosContext (lexbuf.lex_start_p, lexbuf.lex_curr_p))
 
 let escaped_to_char str lexbuf = match str with
   | "\\n" -> '\n'
@@ -127,7 +127,7 @@ rule lexer = parse
   | eof                               { EOF }
   | _ as chr                          {
                                         print_position lexbuf;
-                                        Error.warning "character (ASCII: 0x%X) cannot be parsed" (Char.code chr);
+                                        Error.warning "Character (ASCII: 0x%X) cannot be parsed" (Char.code chr);
                                         lexer lexbuf
                                       }
 
@@ -141,7 +141,7 @@ and parse_multiline_comment level = parse
   | "(*"                              { parse_multiline_comment (level+1) lexbuf }
   | '\n'                              { new_line lexbuf; parse_multiline_comment level lexbuf }
 
-  | eof                               { print_position lexbuf; Error.fatal "unterminated comment at the end-of-file" }
+  | eof                               { print_position lexbuf; Error.fatal "Unterminated comment at the end-of-file" }
   | _                                 { parse_multiline_comment level lexbuf }
 
 
@@ -159,9 +159,9 @@ and parse_char = parse
                                       { CHAR(escaped_to_char esc lexbuf) }
 
   | (_ as chr) '\''                   { CHAR(chr) }
-  | eof                               { Error.fatal "unterminated char at the end-of-file" }
+  | eof                               { Error.fatal "Unterminated char at the end-of-file" }
 
-  | _                                 { print_position lexbuf; Error.error "invalid escape sequence"; lexer lexbuf }
+  | _                                 { print_position lexbuf; Error.error "Invalid escape sequence"; lexer lexbuf }
 
 
 and parse_string buf = parse
@@ -172,8 +172,8 @@ and parse_string buf = parse
 
   | "\\" (('x' hexdig hexdig) as esc) { Buffer.add_char buf (escaped_to_char esc lexbuf); parse_string buf lexbuf }
 
-  | '\n'                              { print_position lexbuf; Error.fatal "multiline string" }
-  | eof                               { Error.fatal "unterminated string at the end-of-file" }
+  | '\n'                              { print_position lexbuf; Error.fatal "Multiline string" }
+  | eof                               { Error.fatal "Unterminated string at the end-of-file" }
 
   | _ as chr                          { Buffer.add_char buf chr; parse_string buf lexbuf }
 

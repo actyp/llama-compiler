@@ -1,5 +1,5 @@
 (** Usage message of llama *)
-let usage_msg = "Usage: llama [--lex-only | --parse-only] <file>"
+let usage_msg = "Usage: llama [--lex-only | --parse-only | --infer-only] <file>"
 
 (** Variable for input file *)
 let filename = ref ""
@@ -10,6 +10,9 @@ let lex_only_opt = ref false
 (** Variable for --parse-only option*)
 let parse_only_opt = ref false
 
+(** Variable for --infer-only option*)
+let infer_only_opt = ref false
+
 (** Function applied to filename provided *)
 let anon_fun f = filename := f
 
@@ -17,6 +20,7 @@ let anon_fun f = filename := f
 let speclist = [
   ("--lex-only", Arg.Set lex_only_opt, "Lexical analysis only");
   ("--parse-only", Arg.Set parse_only_opt, "Parsing and printing AST only");
+  ("--infer-only", Arg.Set infer_only_opt, "Printing type-inferred AST only");
 ]
 
 (** [close_exit in_ch cd] closes abruptly channel [in_ch] and exits with code [cd] *)
@@ -35,8 +39,7 @@ let lex_only_fun in_ch =
         (Lexer.string_of_token token) (Lexing.lexeme lexbuf);
       if token <> Parser.EOF then loop ()
     with Error.Terminate ->
-      close_in_noerr in_ch;
-      exit(1)
+      close_exit in_ch 1
   in
     Printf.printf "\n~~ Tokens and Lexemes ~~\n";
     loop ()
@@ -54,8 +57,20 @@ let gen_ast in_ch =
         Error.error "Syntax error";
         close_exit in_ch 1
 
-(** [parse_only_fun in_ch] just creates and pretty prints the AST of input channel [in_ch] *)
+(** [parse_only_fun in_ch] generates and pretty prints the AST of input channel [in_ch] *)
 let parse_only_fun in_ch = Ast.pprint (gen_ast in_ch)
+
+(** [gen_typed_ast in_ch] generates the typed ast given the input channel [in_ch] *)
+let gen_typed_ast in_ch =
+  let ast = gen_ast in_ch in
+  try
+    let venv, tenv = Environment.initial_envs () in
+    let _, _, annotated_ast = Annotate.annotate venv tenv ast in
+    annotated_ast
+  with Error.Terminate ->
+    close_exit in_ch 1
+
+let infer_only_fun in_ch = TypedAst.pprint (gen_typed_ast in_ch)
 
 (** [open_file f] tries to open file [f] handling any system error exception *)
 let open_file f =
@@ -73,3 +88,5 @@ let main =
   then lex_only_fun in_ch
   else if !parse_only_opt
   then parse_only_fun in_ch
+  else if !infer_only_opt
+  then infer_only_fun in_ch
