@@ -19,7 +19,7 @@ and tast = TA.tast
 let generic_array elem_ty = T.ARRAY (0, elem_ty)
 
 (** unhashed symbol used in place of any symbol awaiting substitution in unify *)
-and generic_symbol = ("user defined", 0)
+and generic_symbol () = T.freshGenericSymbol "user defined"
 
 (** [con_lookup_tbl] is used only to collect previously found constraints,
     so as conloclist to contain no (same or symmetric) duplicates *)
@@ -271,7 +271,7 @@ let collect (venv: venv) (tenv: tenv) (tast: tast): CT.contree =
       | [] -> internal_error loc "match expression with no clauses"
       | (p1, e1) :: pairs  ->
         let pat_cons, expr_cons = make_inner_cons (p1, e1) pairs in
-        let userdef_con = make_con (match_ty, T.USERDEF (generic_symbol)) in
+        let userdef_con = make_con (match_ty, T.USERDEF (generic_symbol ())) in
         let hd_pat_con = make_con (p1, match_ty) in
         let hd_expr_con = make_con (e1, ty) in
         userdef_con, (hd_pat_con :: pat_cons), (hd_expr_con :: expr_cons)

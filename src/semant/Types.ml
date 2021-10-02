@@ -71,7 +71,7 @@ let rec is_valid_type = function
 (** [ty_symboltable] is the type for symbol -> ty Map *)
 type ty_symboltable = ty S.symboltable
 
-(* Implementation of fresh-variable creation like [Var 't0] *)
+(** [currvarnum] is the current unused number of fresh variable *)
 let currvarnum = ref 0
 
 (** [freshVar ()] creates and returns a freshly created Var *)
@@ -81,8 +81,12 @@ let freshVar () =
   incr currvarnum;
   VAR s
 
-(** [resetFresh ()] resets the counter referencing fresh vars *)
-let resetFresh () = currvarnum := 0
+(** [genericsymnum] is the current unused number of generic unhashed symbol *)
+let genericsymnum = ref 0
+let freshGenericSymbol (name: string) =
+  let sym = (name, !genericsymnum) in
+  incr genericsymnum;
+  sym
 
 (** [instantiate_func_ty t] return the FUNC type after converting all POLY types in
     function type [t] to fresh vars; if applied to a non function type [t] then [t] is returned *)

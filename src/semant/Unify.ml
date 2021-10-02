@@ -84,7 +84,7 @@ let rec subst_lookup (st: subst_tbl) ty =
     | (T.ARRAY (0, _) as var_ty) -> subst_lookup st var_ty
     | (T.ARRAY (i, ty)) -> T.ARRAY (i, subst_lookup st ty)
     | (T.FUNC (param_tys, ret_ty)) -> T.FUNC (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty)
-    | (T.USERDEF ("user defined", 0) as var_ty) -> subst_lookup st var_ty
+    | (T.USERDEF ("user defined", _) as var_ty) -> subst_lookup st var_ty
     | (T.USERDEF sym) -> T.USERDEF sym
     | (T.CONSTR (param_tys, ret_ty, u)) -> T.CONSTR (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty, u)
     | (T.VAR _ as var_ty) -> subst_lookup st var_ty
@@ -100,7 +100,7 @@ let rec subst_lookup (st: subst_tbl) ty =
       else (H.replace st var_ty latest_ty; latest_ty)
   in
   match ty with
-  | T.VAR _ | T.ARRAY (0, _) | T.USERDEF ("user defined", 0) ->
+  | T.VAR _ | T.ARRAY (0, _) | T.USERDEF ("user defined", _) ->
     update_var_ty ty (latest_of_var_ty ty)
   | _ -> latest_of_ty ty
 
@@ -108,7 +108,7 @@ let rec subst_lookup (st: subst_tbl) ty =
     [var_ty] -> [ty] and [latest_ty] -> [ty] *)
 let replace_subst (st: subst_tbl) (var_ty: T.ty) (latest_ty: T.ty) (new_ty: T.ty) =
   let replace_var var ty = match var with
-    | T.VAR _  | T.ARRAY (0, _) | T.USERDEF ("user defined", 0) ->
+    | T.VAR _  | T.ARRAY (0, _) | T.USERDEF ("user defined", _) ->
       H.replace st var ty
     | _ -> ()
   in
@@ -310,9 +310,9 @@ let unify_and_substitute (contree: CT.contree): subst_tbl =
               raise (ParamNumError (loc, efs.constr_param_num, expected_len, found_len))
           | T.USERDEF s1, T.USERDEF s2 ->
             begin match s1, s2 with
-              | ("user defined", 0), ("user defined", 0) -> ()
-              | ("user defined", 0), _ -> replace_subst st t1 lt1 lt2
-              | _, ("user defined", 0) -> replace_subst st t2 lt2 lt1
+              | ("user defined", _), ("user defined", _) -> ()
+              | ("user defined", _), _ -> replace_subst st t1 lt1 lt2
+              | _, ("user defined", _) -> replace_subst st t2 lt2 lt1
               | o1, o2 when o1 = o2 -> ()
               | _, _ -> raise (UnifyError (loc, mismatch_error_str, lt1, lt2))
             end
