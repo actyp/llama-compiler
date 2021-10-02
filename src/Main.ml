@@ -63,21 +63,24 @@ let parse_only_fun in_ch = Ast.pprint (gen_ast in_ch)
 (** [gen_typed_ast in_ch] generates the typed ast given the input channel [in_ch] *)
 let gen_typed_ast in_ch =
   let ast = gen_ast in_ch in
+  let venv, tenv = Environment.initial_envs () in
   try
-    let venv, tenv = Environment.initial_envs () in
-    let _, _, annotated_ast = Annotate.annotate venv tenv ast in
-    annotated_ast
+    let venv', tenv', annotated_ast = Annotate.annotate venv tenv ast in
+    let contree = Constraint.collect venv' tenv' annotated_ast in
+    let subst_tbl = Unify.unify_and_substitute contree in
+    subst_tbl
   with Error.Terminate ->
     close_exit in_ch 1
 
-let infer_only_fun in_ch = TypedAst.pprint (gen_typed_ast in_ch)
+(** [infer_only_fun in_ch] generates and pretty prints the TypedAST of input channel [in_ch] *)
+    let infer_only_fun in_ch = Unify.pprint (gen_typed_ast in_ch)
 
 (** [open_file f] tries to open file [f] handling any system error exception *)
 let open_file f =
   try
     open_in f
   with Sys_error(msg) ->
-    Printf.printf "System error%s\n" msg;
+    Printf.printf "System error: %s\n" msg;
     exit(1)
 
 (** [main] function parses command line arguments and behaves accordingly *)

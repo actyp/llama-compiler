@@ -5,24 +5,21 @@ module T = Types
 let fun_ty (param_tys: T.ty list) (ret_ty: T.ty): T.ty = T.FUNC (param_tys, ret_ty)
 
 (** [string_ty ()] returns the equivalent array of char from Types *)
-let string_ty () = T.ARRAY (1, T.CHAR, ref ())
+let string_ty () = T.ARRAY (1, T.CHAR)
 
 (** [unary_operator_functions] is a list of pairs of unary operators and their types *)
 let unary_operator_functions =
-  let fv = T.freshVar () in
   [
     ("( ~+ )" , fun_ty [T.INT] T.INT);
     ("( ~- )" , fun_ty [T.INT] T.INT);
     ("( ~+. )", fun_ty [T.FLOAT] T.FLOAT);
     ("( ~-. )", fun_ty [T.FLOAT] T.FLOAT);
-    ("( ! )"  , fun_ty [T.REF fv] fv);
+    ("( ! )"  , fun_ty [T.REF (T.POLY 1, ref ())] (T.POLY 1));
     ("( not )", fun_ty [T.BOOL] T.BOOL);
   ]
 
 (** [binary_operator_functions] is a list of pairs of binary operators and their types *)
 let binary_operator_functions =
-  let fv1 = T.freshVar ()
-  and fv2 = T.freshVar () in
   [
     ("( + )"  , fun_ty [T.INT; T.INT] T.INT);
     ("( - )"  , fun_ty [T.INT; T.INT] T.INT);
@@ -34,18 +31,18 @@ let binary_operator_functions =
     ("( /. )" , fun_ty [T.FLOAT; T.FLOAT] T.FLOAT);
     ("( mod )", fun_ty [T.INT; T.INT] T.INT);
     ("( ** )" , fun_ty [T.FLOAT; T.FLOAT] T.FLOAT);
-    ("( = )"  , fun_ty [fv1; fv1] T.BOOL);
-    ("( <> )" , fun_ty [fv1; fv1] T.BOOL);
-    ("( < )"  , fun_ty [fv1; fv1] T.BOOL);
-    ("( > )"  , fun_ty [fv1; fv1] T.BOOL);
-    ("( <= )" , fun_ty [fv1; fv1] T.BOOL);
-    ("( >= )" , fun_ty [fv1; fv1] T.BOOL);
-    ("( == )" , fun_ty [fv1; fv1] T.BOOL);
-    ("( != )" , fun_ty [fv1; fv1] T.BOOL);
+    ("( = )"  , fun_ty [T.POLY 1; T.POLY 1] T.BOOL);
+    ("( <> )" , fun_ty [T.POLY 1; T.POLY 1] T.BOOL);
+    ("( < )"  , fun_ty [T.POLY 1; T.POLY 1] T.BOOL);
+    ("( > )"  , fun_ty [T.POLY 1; T.POLY 1] T.BOOL);
+    ("( <= )" , fun_ty [T.POLY 1; T.POLY 1] T.BOOL);
+    ("( >= )" , fun_ty [T.POLY 1; T.POLY 1] T.BOOL);
+    ("( == )" , fun_ty [T.POLY 1; T.POLY 1] T.BOOL);
+    ("( != )" , fun_ty [T.POLY 1; T.POLY 1] T.BOOL);
     ("( && )" , fun_ty [T.BOOL; T.BOOL] T.BOOL);
     ("( || )" , fun_ty [T.BOOL; T.BOOL] T.BOOL);
-    ("( ; )"  , fun_ty [fv1; fv2] fv2);
-    ("( := )" , fun_ty [T.REF fv1; fv1] T.UNIT);
+    ("( ; )"  , fun_ty [T.POLY 1; T.POLY 2] (T.POLY 2));
+    ("( := )" , fun_ty [T.REF (T.POLY 1, ref ()); (T.POLY 1)] T.UNIT);
   ]
 
 (** [io_functions] is a list of pairs of i/o functions and their types *)
@@ -56,11 +53,11 @@ let io_functions =
     ("print_char"  , fun_ty [T.CHAR] T.UNIT);
     ("print_float" , fun_ty [T.FLOAT] T.UNIT);
     ("print_string", fun_ty [string_ty ()] T.UNIT);
-    ("read_int"    , fun_ty [T.INT] T.UNIT);
-    ("read_bool"   , fun_ty [T.BOOL] T.UNIT);
-    ("read_char"   , fun_ty [T.CHAR] T.UNIT);
-    ("read_float"  , fun_ty [T.FLOAT] T.UNIT);
-    ("read_string" , fun_ty [string_ty ()] T.UNIT);
+    ("read_int"    , fun_ty [T.UNIT] T.INT);
+    ("read_bool"   , fun_ty [T.UNIT] T.BOOL);
+    ("read_char"   , fun_ty [T.UNIT] T.CHAR);
+    ("read_float"  , fun_ty [T.UNIT] T.FLOAT);
+    ("read_string" , fun_ty [T.UNIT] (string_ty ()));
   ]
 
 (** [mathematical_functions] is a list of pairs of mathematical functions and their types *)
@@ -81,8 +78,8 @@ let mathematical_functions =
 (** [increment_functions] is a list of pairs of increment functions and their types *)
 let increment_functions =
   [
-    ("incr", fun_ty [T.REF T.INT] T.UNIT);
-    ("decr", fun_ty [T.REF T.INT] T.UNIT);
+    ("incr", fun_ty [T.REF (T.INT, ref ())] T.UNIT);
+    ("decr", fun_ty [T.REF (T.INT, ref ())] T.UNIT);
   ]
 
 (** [conversion_functions] is a list of pairs of conversion functions and their types *)

@@ -220,10 +220,10 @@ expr:
   | expr binop expr                                          { Ast.E_FuncCall     {name_sym = Symbol.symbol($2); param_exprs = [$1; $3]; loc = $loc} }
   | ID; par_expr+                                            { Ast.E_FuncCall     {name_sym = Symbol.symbol($1); param_exprs = $2; loc = $loc} }
   | CID; par_expr+                                           { Ast.E_ConstrCall   {name_sym = Symbol.symbol($1); param_exprs = $2; loc = $loc} }
-  | DIM; INT?; ID                                            { Ast.E_ArrayDim     {dim_opt = $2; array_name_sym = Symbol.symbol($3); loc = $loc} }
+  | DIM; INT?; ID                                            { Ast.E_ArrayDim     {dim_opt = $2; name_sym = Symbol.symbol($3); loc = $loc} }
   | NEW; _type                                               { Ast.E_New          {ty = $2; loc = $loc} }
   | DELETE; expr                                             { Ast.E_Delete       {expr = $2; loc = $loc} }
-  | letdef; IN; expr                                         { Ast.E_LetIn        {letdef = $1; in_expr = $3; loc = $loc($2)} }
+  | letdef; IN; expr                                         { Ast.E_LetIn        {letdef = $1; in_expr = $3; loc = $loc} }
   | BEGIN; expr; END                                         { Ast.E_BeginEnd     {expr = $2; loc = $loc} }
   | IF; expr; THEN; expr; ELSE; expr                         { Ast.E_MatchedIF    {if_expr = $2; then_expr = $4; else_expr = $6; loc = $loc} }
   | IF; expr; THEN; expr %prec UIF                           { Ast.E_MatchedIF    {if_expr = $2; then_expr = $4; else_expr = Ast.E_Unit $loc; loc = $loc} }

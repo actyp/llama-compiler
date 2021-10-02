@@ -111,3 +111,9 @@ and warning fmt =
 and message fmt =
   let fmt = "@[<v 2>" ^^ fmt ^^ "@]@;@?" in
   eprintf fmt
+
+(** [pos_fatal_error loc] prints the error location obtained from [loc] and
+    returns [fatal] function to apply to remaining arguments *)
+let pos_fatal_error loc =
+  print_position (err_formatter) (position_context loc);
+  fatal

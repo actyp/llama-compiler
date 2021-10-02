@@ -15,11 +15,16 @@ let v_error_fmt = format_of_string "Unbound value %s"
 (** [t_error_fmt] format string on unbound type constructor *)
 and t_error_fmt = format_of_string "Unbound type constructor %s"
 
-(** [fatal_error loc] prints the error location obtained from [loc] and
-    returns [Error.fatal] function to apply to remaining arguments *)
-let fatal_error loc =
-  Error.print_position (Format.err_formatter) (Error.position_context loc);
-  Error.fatal
+(** [fatal_error loc] invokes Error.pos_fatal_error [loc] *)
+let fatal_error loc = Error.pos_fatal_error loc
+
+(** [dim_opt_to_num loc d] returns the number provided from int option [d] in the
+    array dim expression. Raises: Error.Terminate using [fatal_error] if the number
+    provided is less than 1 *)
+let dim_opt_to_num loc = function
+  | None -> 1
+  | Some 0 -> fatal_error loc "Number in dim expression should be greater than 0"
+  | Some num -> num
 
 (** [rev l] reverses list [l] in linear time *)
 let rev l =
@@ -46,7 +51,7 @@ let from_ast_type loc tenv ty = match TA.from_ast_type ty with
 (** [ty_opt_to_ty loc tenv ty_opt] converts ast [ty_opt] to typed ast type or returns a fresh var
     Raises: Error.Terminate using [from_ast_type] with [tenv] and [loc] *)
 let ty_opt_to_ty loc tenv ty_opt = match ty_opt with
-  | None   -> T.freshVar ()
+  | None -> T.freshVar ()
   | Some ty -> from_ast_type loc tenv ty
 
 (** [make_fun_ty aparams ret_ty] from TypedAst.Param list [aparams] and return function type [ret_ty]
@@ -127,12 +132,14 @@ and annotate_tdec_funs =
     T.types [userty], [tenv] and [c] *)
 and annotate_constr userty tenv = function
   | A.Constr { name_sym; tys_opt = None; loc } ->
-    let tenv' = S.enter tenv name_sym userty in
-    tenv', TA.PlainConstr { ty = userty; name_sym; loc }
+    let ty = T.CONSTR ([], userty, ref ()) in
+    let tenv' = S.enter tenv name_sym ty in
+    tenv', TA.Constr { ty = ty; name_sym; loc }
   | A.Constr { name_sym; tys_opt = Some t_list; loc } ->
-    let atys = List.map (from_ast_type loc tenv) t_list in
-    let tenv' = S.enter tenv name_sym userty in
-    tenv', TA.SynthConstr { ty = userty; name_sym; tys = atys; loc }
+    let tys = List.map (from_ast_type loc tenv) t_list in
+    let ty = T.CONSTR (tys, userty, ref ()) in
+    let tenv' = S.enter tenv name_sym ty in
+    tenv', TA.Constr { ty = ty; name_sym; loc }
 
 (** [annotate_non_rec_dec_funs] is a tuple containing:
     - [annotate_non_rec_dec venv tenv d] for returning the typed tdec of [d] using [venv], [tenv]
@@ -150,13 +157,13 @@ and annotate_non_rec_dec_funs =
       let fun_ty = make_fun_ty aparams ret_ty in
       let abody = annotate_expr local_venv tenv body in
       TA.FunctionDec { ty = fun_ty; name_sym; params = aparams; body = abody; loc }
-    | MutVarDec { name_sym; ty_opt; loc } ->
-      let ty = T.REF (ty_opt_to_ty loc tenv ty_opt) in
+    | A.MutVarDec { name_sym; ty_opt; loc } ->
+      let ty = T.REF (ty_opt_to_ty loc tenv ty_opt, ref ()) in
       TA.MutVarDec { ty = ty; name_sym; loc }
-    | ArrayDec { name_sym; dims_len_exprs; ty_opt; loc } ->
+    | A.ArrayDec { name_sym; dims_len_exprs; ty_opt; loc } ->
       let value_ty = ty_opt_to_ty loc tenv ty_opt in
       let dim_num = List.length dims_len_exprs in
-      let array_ty = T.ARRAY (dim_num, value_ty, ref ()) in
+      let array_ty = T.ARRAY (dim_num, value_ty) in
       let adims_len_exprs = List.map (annotate_expr venv tenv) dims_len_exprs in
       TA.ArrayDec { ty = array_ty; name_sym; dims_len_exprs = adims_len_exprs; loc }
 
@@ -188,13 +195,13 @@ and annotate_rec_dec_funs =
       let aparams = List.map aparam_from_annotate params in
       let fun_ty = make_fun_ty aparams ret_ty in
       S.enter venv name_sym fun_ty
-    | MutVarDec { name_sym; ty_opt; loc } ->
-      let ty = T.REF (ty_opt_to_ty loc tenv ty_opt) in
+    | A.MutVarDec { name_sym; ty_opt; loc } ->
+      let ty = T.REF (ty_opt_to_ty loc tenv ty_opt, ref ()) in
       S.enter venv name_sym ty
-    | ArrayDec { name_sym; dims_len_exprs; ty_opt; loc } ->
+    | A.ArrayDec { name_sym; dims_len_exprs; ty_opt; loc } ->
       let value_ty = ty_opt_to_ty loc tenv ty_opt in
       let dim_num = List.length dims_len_exprs in
-      let array_ty = T.ARRAY (dim_num, value_ty, ref ()) in
+      let array_ty = T.ARRAY (dim_num, value_ty) in
       S.enter venv name_sym array_ty
 
   and annotate_rec_dec venv tenv = function
@@ -207,10 +214,10 @@ and annotate_rec_dec_funs =
       let local_venv, aparams = annotate_rec_params loc venv ty params in
       let abody = annotate_expr local_venv tenv body in
       TA.FunctionDec { ty = ty; name_sym; params = aparams; body = abody; loc }
-    | MutVarDec { name_sym; ty_opt; loc } ->
+    | A.MutVarDec { name_sym; ty_opt; loc } ->
       let ty = sym_to_ty loc v_error_fmt venv name_sym in
       TA.MutVarDec { ty = ty; name_sym; loc }
-    | ArrayDec { name_sym; dims_len_exprs; ty_opt; loc } ->
+    | A.ArrayDec { name_sym; dims_len_exprs; ty_opt; loc } ->
       let ty = sym_to_ty loc v_error_fmt venv name_sym in
       let adims_len_exprs = List.map (annotate_expr venv tenv) dims_len_exprs in
       TA.ArrayDec { ty = ty; name_sym; dims_len_exprs = adims_len_exprs; loc }
@@ -226,110 +233,117 @@ and annotate_rec_dec_funs =
   in
   augment_venv, annotate_rec_dec
 
-(** [annotate_expr venv tenv expr] returns the typed expr generated from [venv], [tenv] and [expr] *)
-and annotate_expr venv tenv = function
-  | A.E_ID  { name_sym; loc } ->
-    let ty = sym_to_ty loc v_error_fmt venv name_sym in
-    TA.E_ID { ty = ty; name_sym; loc }
-  | A.E_Int  { value; loc } ->
-    TA.E_Int { ty = T.INT; value; loc }
-  | A.E_Float  { value; loc } ->
-    TA.E_Float { ty = T.FLOAT; value; loc }
-  | A.E_Char  { value; loc } ->
-    TA.E_Char { ty = T.CHAR; value; loc }
-  | A.E_String  { value; loc } ->
-    TA.E_String { ty = T.ARRAY (1, T.CHAR, ref ()); value; loc }
-  | A.E_BOOL { value; loc } ->
-    TA.E_BOOL { ty = T.BOOL; value; loc }
-  | A.E_Unit  loc ->
-    TA.E_Unit { ty = T.UNIT; loc }
-  | A.E_ArrayRef { name_sym; exprs; loc } ->
-    let ty = T.REF (sym_to_ty loc v_error_fmt venv name_sym) in
-    let aexprs = List.map (annotate_expr venv tenv) exprs in
-    TA.E_ArrayRef { ty = ty; name_sym; exprs = aexprs; loc }
-  | A.E_FuncCall { name_sym; param_exprs; loc } ->
-    ignore(sym_to_ty loc v_error_fmt venv name_sym);
-    let ty = T.freshVar() in
-    let aexprs = List.map (annotate_expr venv tenv) param_exprs in
-    TA.E_FuncCall { ty = ty; name_sym; param_exprs = aexprs; loc }
-  | A.E_ConstrCall { name_sym; param_exprs; loc} ->
-    let ty = sym_to_ty loc t_error_fmt tenv name_sym in
-    let aexprs = List.map (annotate_expr venv tenv) param_exprs in
-    TA.E_ConstrCall { ty = ty; name_sym; param_exprs = aexprs; loc }
-  | A.E_ArrayDim { dim_opt; array_name_sym; loc } ->
-    ignore(sym_to_ty loc v_error_fmt venv array_name_sym);
-    let dim = TA.dopt_to_num dim_opt in
-    TA.E_ArrayDim {ty = T.INT; dim = dim; array_name_sym; loc }
-  | A.E_New { ty; loc } ->
-    TA.E_New { ty = T.REF (from_ast_type loc tenv ty); loc }
-  | A.E_Delete { expr; loc } ->
-    let aexpr = annotate_expr venv tenv expr in
-    TA.E_Delete { ty = T.UNIT; expr = aexpr; loc }
-  | A.E_LetIn { letdef; in_expr; loc } ->
-    let ty = T.freshVar () in
-    let venv', aletdef = annotate_let_def venv tenv letdef in
-    let aexpr = annotate_expr venv' tenv in_expr in
-    TA.E_LetIn { ty = ty; letdef = aletdef; in_expr = aexpr; loc }
-  | A.E_BeginEnd { expr; loc } ->
-    let ty = T.freshVar () in
-    let aexpr = annotate_expr venv tenv expr in
-    TA.E_BeginEnd { ty = ty; expr = aexpr; loc }
-  | A.E_MatchedIF { if_expr; then_expr; else_expr; loc } ->
-    let ty = T.freshVar () in
-    let aif = annotate_expr venv tenv if_expr in
-    let athen = annotate_expr venv tenv then_expr in
-    let aelse = annotate_expr venv tenv else_expr in
-    TA.E_MatchedIF { ty = ty; if_expr = aif; then_expr = athen; else_expr = aelse; loc }
-  | A.E_WhileDoDone  { while_expr; do_expr; loc} ->
-    let awhile = annotate_expr venv tenv while_expr in
-    let ado = annotate_expr venv tenv do_expr in
-    TA.E_WhileDoDone  { ty = T.UNIT; while_expr = awhile; do_expr = ado; loc }
-  | A.E_ForDoDone { count_var_sym; start_expr; count_dir; end_expr; do_expr; loc } ->
-    let cdir = TA.from_ast_count_dir count_dir in
-    let astart = annotate_expr venv tenv start_expr in
-    let aend = annotate_expr venv tenv end_expr in
-    let venv' = S.enter venv count_var_sym T.INT in
-    let ado = annotate_expr venv' tenv do_expr in
-    TA.E_ForDoDone { ty = T.UNIT; count_var_sym; start_expr = astart; count_dir = cdir; end_expr = aend; do_expr = ado; loc }
-  | A.E_MatchWithEnd { match_expr; with_clauses; loc } ->
-    let ty = T.freshVar () in
-    let amatch = annotate_expr venv tenv match_expr in
-    let awith = List.map (annotate_clause venv tenv) with_clauses in
-    TA.E_MatchWithEnd { ty = ty; match_expr = amatch; with_clauses = awith; loc }
+(** [annotate_expr venv tenv expr] returns the typed expr generated from [venv], [tenv] and [expr].
+    It contains [annotate_expr_aux] so as not to repeat [venv] and [tenv] parameters,
+    [annotate_clause], [annotate_base_pattern] and [annotate_constr_pattern] *)
+and annotate_expr venv tenv expr =
+  let rec annotate_expr_aux = function
+    | A.E_ID  { name_sym; loc } ->
+      let ty = sym_to_ty loc v_error_fmt venv name_sym in
+      TA.E_ID { ty = ty; name_sym; loc }
+    | A.E_Int  { value; loc } ->
+      TA.E_Int { ty = T.INT; value; loc }
+    | A.E_Float  { value; loc } ->
+      TA.E_Float { ty = T.FLOAT; value; loc }
+    | A.E_Char  { value; loc } ->
+      TA.E_Char { ty = T.CHAR; value; loc }
+    | A.E_String  { value; loc } ->
+      TA.E_String { ty = T.ARRAY (1, T.CHAR); value; loc }
+    | A.E_BOOL { value; loc } ->
+      TA.E_BOOL { ty = T.BOOL; value; loc }
+    | A.E_Unit  loc ->
+      TA.E_Unit { ty = T.UNIT; loc }
+    | A.E_ArrayRef { name_sym; exprs; loc } ->
+      ignore(sym_to_ty loc v_error_fmt venv name_sym);
+      let ty = T.freshVar () in
+      let aexprs = List.map annotate_expr_aux exprs in
+      TA.E_ArrayRef { ty = ty; name_sym; exprs = aexprs; loc }
+    | A.E_FuncCall { name_sym; param_exprs; loc } ->
+      ignore(sym_to_ty loc v_error_fmt venv name_sym);
+      let ty = T.freshVar () in
+      let aexprs = List.map annotate_expr_aux param_exprs in
+      TA.E_FuncCall { ty = ty; name_sym; param_exprs = aexprs; loc }
+    | A.E_ConstrCall { name_sym; param_exprs; loc} ->
+      ignore(sym_to_ty loc t_error_fmt tenv name_sym);
+      let ty = T.freshVar () in
+      let aexprs = List.map annotate_expr_aux param_exprs in
+      TA.E_ConstrCall { ty = ty; name_sym; param_exprs = aexprs; loc }
+    | A.E_ArrayDim { dim_opt; name_sym; loc } ->
+      ignore(sym_to_ty loc v_error_fmt venv name_sym);
+      let dim = dim_opt_to_num loc dim_opt in
+      TA.E_ArrayDim {ty = T.INT; dim = dim; name_sym; loc }
+    | A.E_New { ty; loc } ->
+      TA.E_New { ty = T.DYN_REF (from_ast_type loc tenv ty, ref ()); loc }
+    | A.E_Delete { expr; loc } ->
+      let aexpr = annotate_expr_aux expr in
+      TA.E_Delete { ty = T.UNIT; expr = aexpr; loc }
+    | A.E_LetIn { letdef; in_expr; loc } ->
+      let ty = T.freshVar () in
+      let venv', aletdef = annotate_let_def venv tenv letdef in
+      let aexpr = annotate_expr venv' tenv in_expr in
+      TA.E_LetIn { ty = ty; letdef = aletdef; in_expr = aexpr; loc }
+    | A.E_BeginEnd { expr; loc } ->
+      let ty = T.freshVar () in
+      let aexpr = annotate_expr_aux expr in
+      TA.E_BeginEnd { ty = ty; expr = aexpr; loc }
+    | A.E_MatchedIF { if_expr; then_expr; else_expr; loc } ->
+      let ty = T.freshVar () in
+      let aif = annotate_expr_aux if_expr in
+      let athen = annotate_expr_aux then_expr in
+      let aelse = annotate_expr_aux else_expr in
+      TA.E_MatchedIF { ty = ty; if_expr = aif; then_expr = athen; else_expr = aelse; loc }
+    | A.E_WhileDoDone  { while_expr; do_expr; loc} ->
+      let awhile = annotate_expr_aux while_expr in
+      let ado = annotate_expr_aux do_expr in
+      TA.E_WhileDoDone  { ty = T.UNIT; while_expr = awhile; do_expr = ado; loc }
+    | A.E_ForDoDone { count_var_sym; start_expr; count_dir; end_expr; do_expr; loc } ->
+      let cdir = TA.from_ast_count_dir count_dir in
+      let astart = annotate_expr_aux start_expr in
+      let aend = annotate_expr_aux end_expr in
+      let venv' = S.enter venv count_var_sym T.INT in
+      let ado = annotate_expr venv' tenv do_expr in
+      TA.E_ForDoDone { ty = T.UNIT; count_var_sym; start_expr = astart; count_dir = cdir; end_expr = aend; do_expr = ado; loc }
+    | A.E_MatchWithEnd { match_expr; with_clauses; loc } ->
+      let ty = T.freshVar () in
+      let amatch = annotate_expr_aux match_expr in
+      let awith = List.map annotate_clause with_clauses in
+      TA.E_MatchWithEnd { ty = ty; match_expr = amatch; with_clauses = awith; loc }
 
-(** [annotate_clause venv tenv c] returns the typed clause from [venv], [tenv], [c] *)
-and annotate_clause venv tenv = function
-  | A.BasePattClause { base_pattern; expr; loc } ->
-    let clause_ty = T.FUNC ([T.freshVar ()], T.freshVar ()) in
-    let venv', abase = annotate_base_pattern venv tenv base_pattern in
-    let aexpr = annotate_expr venv' tenv expr in
-    TA.BasePattClause { ty = clause_ty; base_pattern = abase; expr = aexpr; loc }
-  | A.ConstrPattClause { constr_pattern; expr; loc } ->
-    let clause_ty = T.FUNC ([T.freshVar ()], T.freshVar ()) in
-    let venv', aconstr = annotate_constr_pattern venv tenv constr_pattern in
-    let aexpr = annotate_expr venv' tenv expr in
-    TA.ConstrPattClause { ty = clause_ty; constr_pattern = aconstr; expr = aexpr; loc }
+  (** [annotate_clause c] returns the typed clause from Ast.clause [c] supplied with
+      [annotate_expr]'s [venv] and [tenv] *)
+  and annotate_clause = function
+    | A.BasePattClause { base_pattern; expr; loc } ->
+      let venv', abase = annotate_base_pattern venv base_pattern in
+      let aexpr = annotate_expr venv' tenv expr in
+      TA.BasePattClause { base_pattern = abase; expr = aexpr; loc }
+    | A.ConstrPattClause { constr_pattern; expr; loc } ->
+      let venv', aconstr = annotate_constr_pattern venv constr_pattern in
+      let aexpr = annotate_expr venv' tenv expr in
+      TA.ConstrPattClause { constr_pattern = aconstr; expr = aexpr; loc }
 
-(** [annotate_base_pattern venv tenv p] returns the augmented venv' from [venv] and
-    the typed base_pattern from [venv], [tenv] and [p] *)
-and annotate_base_pattern venv tenv = function
-  | A.BP_INT { num; loc } ->
-    venv, TA.BP_INT { ty = T.INT; num; loc }
-  | A.BP_FLOAT { num; loc} ->
-    venv, TA.BP_FLOAT { ty = T.FLOAT; num; loc }
-  | A.BP_CHAR { chr; loc } ->
-    venv, TA.BP_CHAR { ty = T.CHAR; chr; loc }
-  | A.BP_BOOL { value; loc } ->
-    venv, TA.BP_BOOL { ty = T.BOOL; value; loc }
-  | A.BP_ID { name_sym; loc } ->
+  (** [annotate_base_pattern venv p] returns the augmented venv' from [venv] and
+      the typed base_pattern from [venv] and [p] *)
+  and annotate_base_pattern venv = function
+    | A.BP_INT { num; loc } ->
+      venv, TA.BP_INT { ty = T.INT; num; loc }
+    | A.BP_FLOAT { num; loc} ->
+      venv, TA.BP_FLOAT { ty = T.FLOAT; num; loc }
+    | A.BP_CHAR { chr; loc } ->
+      venv, TA.BP_CHAR { ty = T.CHAR; chr; loc }
+    | A.BP_BOOL { value; loc } ->
+      venv, TA.BP_BOOL { ty = T.BOOL; value; loc }
+    | A.BP_ID { name_sym; loc } ->
+      let ty = T.freshVar () in
+      let venv' = S.enter venv name_sym ty in
+      venv', TA.BP_ID { ty = ty; name_sym; loc }
+
+  (** [annotate_constr_pattern venv p] returns the augmented venv' from [venv] and the typed
+      constr_pattern from [venv] and [p]. [tenv] is supplied from [annotate_expr]'s [tenv] *)
+  and annotate_constr_pattern venv (A.CP_BASIC { constr_sym; base_patterns; loc }) =
+    ignore(sym_to_ty loc t_error_fmt tenv constr_sym);
     let ty = T.freshVar () in
-    let venv' = S.enter venv name_sym ty in
-    venv', TA.BP_ID { ty = ty; name_sym; loc }
+    let venv', abase_pats = annotate_list_seq annotate_base_pattern venv base_patterns in
+    venv', TA.CP_BASIC { ty = ty; constr_sym; base_patterns = abase_pats; loc }
 
-(** [annotate_constr_pattern venv tenv p] returns the augmented venv' from [venv] and
-    the typed constr_pattern from [venv], [tenv] and [p] *)
-and annotate_constr_pattern venv tenv (A.CP_BASIC { constr_sym; base_patterns; loc }) =
-  let ty = sym_to_ty loc t_error_fmt tenv constr_sym in
-  let annotate_base_pattern_fixed_tenv venv = annotate_base_pattern venv tenv in
-  let venv', abase_pats = annotate_list_seq annotate_base_pattern_fixed_tenv venv base_patterns in
-  venv', TA.CP_BASIC { ty = ty; constr_sym; base_patterns = abase_pats; loc }
+  in
+  annotate_expr_aux expr

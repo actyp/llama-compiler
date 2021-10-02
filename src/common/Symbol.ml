@@ -4,13 +4,11 @@ module H = Hashtbl
 type symbol = string * int
 [@@deriving show]
 
-exception Symbol
-
 (** current unused symbol number *)
-let currsymnum = ref 0
+let currsymnum = ref 1
 
 (** initial hash size for hash table *)
-let init_hash_size = 128
+let init_hash_size = 512
 
 (** hashtable with initial size [init_hash_size] *)
 let hashtable: (string, int) H.t = H.create init_hash_size
@@ -41,10 +39,10 @@ type 'a symboltable = 'a SymbolTable.t
 (** Empty Symbol Table *)
 let empty = SymbolTable.empty
 
-(** [enter tbl (_,num) bind] adds or overwrites the mapping [num] -> [bind] in Symbol Table [tbl] *)
+(** [enter tbl (_, num) bind] adds or overwrites the mapping [num] -> [bind] in Symbol Table [tbl] *)
 let enter (tbl: 'a symboltable) ((_, num): symbol) (bind: 'a): 'a symboltable =
   SymbolTable.add num bind tbl
 
-(** [look tbl (_,num)] returns a binding option of [num]'s mapping in Symbol Table [tbl] *)
+(** [look tbl (_, num)] returns a binding option of [num]'s mapping in Symbol Table [tbl] *)
 let look (tbl: 'a symboltable) ((_, num): symbol): 'a option =
   SymbolTable.find_opt num tbl

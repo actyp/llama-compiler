@@ -53,7 +53,7 @@ and expr =
   | E_ArrayRef     of { name_sym: symbol; exprs: expr list; loc: loc }
   | E_FuncCall     of { name_sym: symbol; param_exprs: expr list; loc: loc }
   | E_ConstrCall   of { name_sym: symbol; param_exprs: expr list; loc: loc }
-  | E_ArrayDim     of { dim_opt: int option; array_name_sym: symbol; loc: loc }
+  | E_ArrayDim     of { dim_opt: int option; name_sym: symbol; loc: loc }
   | E_New          of { ty: _type; loc: loc }
   | E_Delete       of { expr: expr; loc: loc }
   | E_LetIn        of { letdef: def; in_expr: expr; loc: loc }
