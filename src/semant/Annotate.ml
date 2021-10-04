@@ -23,8 +23,11 @@ let fatal_error loc = Error.pos_fatal_error loc
     provided is less than 1 *)
 let dim_opt_to_num loc = function
   | None -> 1
-  | Some 0 -> fatal_error loc "Number in dim expression should be greater than 0"
-  | Some num -> num
+  | Some num ->
+    if num > 0
+    then num
+    else fatal_error loc "Number in dim expression should be greater than 0"
+
 
 (** [rev l] reverses list [l] in linear time *)
 let rev l =
@@ -258,6 +261,15 @@ and annotate_expr venv tenv expr =
       let ty = T.freshVar () in
       let aexprs = List.map annotate_expr_aux exprs in
       TA.E_ArrayRef { ty = ty; name_sym; exprs = aexprs; loc }
+    | A.E_ArrayDim { dim_opt; name_sym; loc } ->
+      ignore(sym_to_ty loc v_error_fmt venv name_sym);
+      let dim = dim_opt_to_num loc dim_opt in
+      TA.E_ArrayDim {ty = T.INT; dim = dim; name_sym; loc }
+    | A.E_New { ty; loc } ->
+      TA.E_New { ty = T.DYN_REF (from_ast_type loc tenv ty, ref ()); loc }
+    | A.E_Delete { expr; loc } ->
+      let aexpr = annotate_expr_aux expr in
+      TA.E_Delete { ty = T.UNIT; expr = aexpr; loc }
     | A.E_FuncCall { name_sym; param_exprs; loc } ->
       ignore(sym_to_ty loc v_error_fmt venv name_sym);
       let ty = T.freshVar () in
@@ -268,15 +280,6 @@ and annotate_expr venv tenv expr =
       let ty = T.freshVar () in
       let aexprs = List.map annotate_expr_aux param_exprs in
       TA.E_ConstrCall { ty = ty; name_sym; param_exprs = aexprs; loc }
-    | A.E_ArrayDim { dim_opt; name_sym; loc } ->
-      ignore(sym_to_ty loc v_error_fmt venv name_sym);
-      let dim = dim_opt_to_num loc dim_opt in
-      TA.E_ArrayDim {ty = T.INT; dim = dim; name_sym; loc }
-    | A.E_New { ty; loc } ->
-      TA.E_New { ty = T.DYN_REF (from_ast_type loc tenv ty, ref ()); loc }
-    | A.E_Delete { expr; loc } ->
-      let aexpr = annotate_expr_aux expr in
-      TA.E_Delete { ty = T.UNIT; expr = aexpr; loc }
     | A.E_LetIn { letdef; in_expr; loc } ->
       let ty = T.freshVar () in
       let venv', aletdef = annotate_let_def venv tenv letdef in

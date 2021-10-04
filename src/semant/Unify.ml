@@ -53,7 +53,14 @@ let efs = {
 (** [string_fmt str] creates a format from string [str], which contains two substrings *)
 let string_fmt str = Scanf.format_from_string str "%s%s"
 
+(** [UnifyError (loc, error_str, ty1, ty2)] exception raised on unification error of
+    Types.ty [t1] and [t2] including the msg [error_str] and location [loc] *)
 exception UnifyError of CT.loc * string * T.ty * T.ty
+
+(** [ParamNumError (loc, error_str, expected, found)] exception raised on wrong number of
+    parameters applied to function or constructor call or array ref. [expected] is the
+    number of expected and [found] is the number of found parameters. The msg [error_string]
+    and location [loc] are included *)
 exception ParamNumError of CT.loc * string * int * int
 
 (** [subst_tbl] is the type of Types.ty to Types.ty Hashtbl used for Types.VAR to Types.ty mapping *)
@@ -79,16 +86,16 @@ let rec subst_lookup (st: subst_tbl) ty =
     | T.CHAR -> T.CHAR
     | T.BOOL -> T.BOOL
     | T.FLOAT -> T.FLOAT
-    | (T.REF (ty, u)) -> T.REF ((subst_lookup st ty), u)
-    | (T.DYN_REF (ty, u)) -> T.DYN_REF ((subst_lookup st ty), u)
-    | (T.ARRAY (0, _) as var_ty) -> subst_lookup st var_ty
-    | (T.ARRAY (i, ty)) -> T.ARRAY (i, subst_lookup st ty)
-    | (T.FUNC (param_tys, ret_ty)) -> T.FUNC (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty)
-    | (T.USERDEF ("user defined", _) as var_ty) -> subst_lookup st var_ty
-    | (T.USERDEF sym) -> T.USERDEF sym
-    | (T.CONSTR (param_tys, ret_ty, u)) -> T.CONSTR (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty, u)
-    | (T.VAR _ as var_ty) -> subst_lookup st var_ty
-    | (T.POLY _ as p) -> internal_error "polymorphic %s found in substitution table" (T.ty_to_string p)
+    | T.REF (ty, u) -> T.REF ((subst_lookup st ty), u)
+    | T.DYN_REF (ty, u) -> T.DYN_REF ((subst_lookup st ty), u)
+    | T.ARRAY (0, _) as var_ty -> subst_lookup st var_ty
+    | T.ARRAY (i, ty) -> T.ARRAY (i, subst_lookup st ty)
+    | T.FUNC (param_tys, ret_ty) -> T.FUNC (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty)
+    | T.USERDEF ("user defined", _) as var_ty -> subst_lookup st var_ty
+    | T.USERDEF sym -> T.USERDEF sym
+    | T.CONSTR (param_tys, ret_ty, u) -> T.CONSTR (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty, u)
+    | T.VAR _ as var_ty -> subst_lookup st var_ty
+    | T.POLY _ as p -> internal_error "polymorphic %s found in substitution table" (T.ty_to_string p)
 
   (** [update_var_ty var_ty latest_ty] updates current binding of [var_ty] to [latest_ty] *)
   and update_var_ty var_ty latest_ty =
@@ -138,9 +145,9 @@ let rec occurs (var: T.ty) (ty: T.ty) = match var with
   | _ -> false
 
 
-(** [unify_and_substitute contree] traverses ConstaintTree.contree [contree], solves the constraints
+(** [unify_and_solve contree] traverses ConstaintTree.contree [contree], solves the constraints
     and returns the resulting [subst_tbl] *)
-let unify_and_substitute (contree: CT.contree): subst_tbl =
+let unify_and_solve (contree: CT.contree): subst_tbl =
 
   (** [handle_exception unify d] handles exception raises by the call [unify d] *)
   let rec handle_exception unify d =
@@ -191,6 +198,12 @@ let unify_and_substitute (contree: CT.contree): subst_tbl =
         List.iter unify_expr exprs;
         unify_ext_loc expr_cons expr_locs None;
         unify_ext_loc array_cons array_locs array_error_strs_opt
+      | CT.E_ArrayDim { con; name_sym; loc } ->
+        unify_con con loc [] (Some efs.array_dim_sym)
+      | CT.E_Delete { con; expr; loc } ->
+        let expr_loc = CT.expr_loc expr in
+        unify_expr expr;
+        unify_con con expr_loc [] None
       | CT.E_FuncCall { con; param_exprs; loc } ->
         let param_locs = List.map CT.expr_loc param_exprs in
         List.iter unify_expr param_exprs;
@@ -199,12 +212,6 @@ let unify_and_substitute (contree: CT.contree): subst_tbl =
         let param_locs = List.map CT.expr_loc param_exprs in
         List.iter unify_expr param_exprs;
         unify_con con loc param_locs None
-      | CT.E_ArrayDim { con; name_sym; loc } ->
-        unify_con con loc [] (Some efs.array_dim_sym)
-      | CT.E_Delete { con; expr; loc } ->
-        let expr_loc = CT.expr_loc expr in
-        unify_expr expr;
-        unify_con con expr_loc [] None
       | CT.E_LetIn { con; letdef; in_expr; loc } ->
         unify_def letdef;
         unify_expr in_expr;

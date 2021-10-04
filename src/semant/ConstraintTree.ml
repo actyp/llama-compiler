@@ -28,10 +28,10 @@ and dec =
 and expr =
   | E_Trivial      of loc
   | E_ArrayRef     of { array_cons: con list; expr_cons: con list; name_sym: symbol; exprs: expr list; loc: loc }
-  | E_FuncCall     of { con: con; param_exprs: expr list; loc: loc }
-  | E_ConstrCall   of { con: con; param_exprs: expr list; loc: loc }
   | E_ArrayDim     of { con: con; name_sym: symbol; loc: loc }
   | E_Delete       of { con: con; expr: expr; loc: loc }
+  | E_FuncCall     of { con: con; param_exprs: expr list; loc: loc }
+  | E_ConstrCall   of { con: con; param_exprs: expr list; loc: loc }
   | E_LetIn        of { con: con; letdef: def; in_expr: expr; loc: loc }
   | E_BeginEnd     of { con: con; expr: expr; loc: loc }
   | E_MatchedIF    of { cons: con list; if_expr: expr; then_expr: expr; else_expr: expr; loc: loc }
@@ -59,8 +59,8 @@ let pprint (contree: contree) = Printf.printf "Constraint tree:\n %s\n" (show_co
 
 (** [expr_loc e] extracts loc from expr [e] *)
 let rec expr_loc = function
-  | E_Trivial loc | E_ArrayRef { loc } | E_FuncCall { loc } | E_ConstrCall { loc } | E_ArrayDim { loc }
-  | E_Delete { loc } | E_LetIn { loc } | E_BeginEnd { loc } | E_MatchedIF { loc } | E_WhileDoDone { loc }
+  | E_Trivial loc | E_ArrayRef { loc } | E_ArrayDim { loc } | E_Delete { loc } | E_FuncCall { loc }
+  | E_ConstrCall { loc } | E_LetIn { loc } | E_BeginEnd { loc } | E_MatchedIF { loc } | E_WhileDoDone { loc }
   | E_ForDoDone { loc } | E_MatchWithEnd { loc } ->
     loc
 

@@ -161,18 +161,6 @@ let collect (venv: venv) (tenv: tenv) (tast: tast): CT.contree =
         let array_cons = List.map make_con [(ty, T.REF (elem_ty, ref ())); (T.ARRAY (dim, elem_ty), array_ty)] in
         let expr_cons = List.map (fun ty -> make_con (ty, T.INT)) expr_tys in
         CT.E_ArrayRef { array_cons = array_cons; expr_cons = expr_cons; name_sym; exprs = conexprs; loc }
-      | TA.E_FuncCall { ty; name_sym; param_exprs; loc } ->
-        let conexprs = List.map collect_expr_aux param_exprs in
-        let param_tys = List.map TA.expr_ty param_exprs in
-        let fun_ty = T.instantiate_func_ty (sym_to_ty loc venv name_sym) in
-        let con = make_con (T.FUNC (param_tys, ty), fun_ty) in
-        CT.E_FuncCall { con = con; param_exprs = conexprs; loc }
-      | TA.E_ConstrCall { ty; name_sym; param_exprs; loc } ->
-        let conexprs = List.map collect_expr_aux param_exprs in
-        let param_tys = List.map TA.expr_ty param_exprs in
-        let constr_ty = sym_to_ty loc tenv name_sym in
-        let con = make_con (T.CONSTR (param_tys, ty, ref ()), constr_ty) in
-        CT.E_ConstrCall { con = con; param_exprs = conexprs; loc }
       | TA.E_ArrayDim { ty; dim; name_sym; loc } ->
         let array_ty = sym_to_ty loc venv name_sym in
         let elem_ty = T.freshVar () in
@@ -184,6 +172,18 @@ let collect (venv: venv) (tenv: tenv) (tast: tast): CT.contree =
         let ty = T.freshVar() in
         let con = make_con (expr_ty, ty) in
         CT.E_Delete { con = con; expr = conexpr; loc }
+     | TA.E_FuncCall { ty; name_sym; param_exprs; loc } ->
+        let conexprs = List.map collect_expr_aux param_exprs in
+        let param_tys = List.map TA.expr_ty param_exprs in
+        let fun_ty = T.instantiate_func_ty (sym_to_ty loc venv name_sym) in
+        let con = make_con (T.FUNC (param_tys, ty), fun_ty) in
+        CT.E_FuncCall { con = con; param_exprs = conexprs; loc }
+      | TA.E_ConstrCall { ty; name_sym; param_exprs; loc } ->
+        let conexprs = List.map collect_expr_aux param_exprs in
+        let param_tys = List.map TA.expr_ty param_exprs in
+        let constr_ty = sym_to_ty loc tenv name_sym in
+        let con = make_con (T.CONSTR (param_tys, ty, ref ()), constr_ty) in
+        CT.E_ConstrCall { con = con; param_exprs = conexprs; loc }
       | TA.E_LetIn { ty; letdef; in_expr; loc } ->
         let local_venv, conletdef = collect_let_def_local_venv venv letdef in
         let conexpr = collect_expr local_venv in_expr in

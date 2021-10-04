@@ -42,11 +42,11 @@ and expr =
   | E_BOOL         of { ty: T.ty; value: bool; loc: loc }
   | E_Unit         of { ty: T.ty; loc: loc }
   | E_ArrayRef     of { ty: T.ty; name_sym: symbol; exprs: expr list; loc: loc }
-  | E_FuncCall     of { ty: T.ty; name_sym: symbol; param_exprs: expr list; loc: loc }
-  | E_ConstrCall   of { ty: T.ty; name_sym: symbol; param_exprs: expr list; loc: loc }
   | E_ArrayDim     of { ty: T.ty; dim: int; name_sym: symbol; loc: loc }
   | E_New          of { ty: T.ty; loc: loc }
   | E_Delete       of { ty: T.ty; expr: expr; loc: loc }
+  | E_FuncCall     of { ty: T.ty; name_sym: symbol; param_exprs: expr list; loc: loc }
+  | E_ConstrCall   of { ty: T.ty; name_sym: symbol; param_exprs: expr list; loc: loc }
   | E_LetIn        of { ty: T.ty; letdef: def; in_expr: expr; loc: loc }
   | E_BeginEnd     of { ty: T.ty; expr: expr; loc: loc }
   | E_MatchedIF    of { ty: T.ty; if_expr: expr; then_expr: expr; else_expr: expr; loc: loc }
@@ -120,7 +120,7 @@ and from_ast_count_dir = function
 (** [expr_ty e] extracts [ty] from expr [e] *)
 let rec expr_ty = function
   | E_ID { ty } | E_Int { ty } | E_Float { ty } | E_Char { ty } | E_String { ty } | E_BOOL { ty } | E_Unit { ty }
-  | E_ArrayRef { ty } | E_FuncCall { ty } | E_ConstrCall { ty } | E_ArrayDim { ty } | E_New { ty } | E_Delete { ty }
+  | E_ArrayRef { ty } | E_ArrayDim { ty } | E_New { ty } | E_Delete { ty } | E_FuncCall { ty } | E_ConstrCall { ty }
   | E_LetIn { ty } | E_BeginEnd { ty } | E_MatchedIF { ty } | E_WhileDoDone  { ty } | E_ForDoDone { ty }
   | E_MatchWithEnd { ty } ->
     ty

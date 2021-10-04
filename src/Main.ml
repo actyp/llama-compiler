@@ -67,13 +67,14 @@ let gen_typed_ast in_ch =
   try
     let venv', tenv', annotated_ast = Annotate.annotate venv tenv ast in
     let contree = Constraint.collect venv' tenv' annotated_ast in
-    let subst_tbl = Unify.unify_and_substitute contree in
-    subst_tbl
+    let subst_tbl = Unify.unify_and_solve contree in
+    let typed_ast = Substitute.substitute_and_typecheck annotated_ast subst_tbl in
+    typed_ast
   with Error.Terminate ->
     close_exit in_ch 1
 
 (** [infer_only_fun in_ch] generates and pretty prints the TypedAST of input channel [in_ch] *)
-    let infer_only_fun in_ch = Unify.pprint (gen_typed_ast in_ch)
+let infer_only_fun in_ch = TypedAst.pprint (gen_typed_ast in_ch)
 
 (** [open_file f] tries to open file [f] handling any system error exception *)
 let open_file f =
@@ -83,7 +84,7 @@ let open_file f =
     Printf.printf "System error: %s\n" msg;
     exit(1)
 
-(** [main] function parses command line arguments and behaves accordingly *)
+(** [main] parses command line arguments and behaves accordingly *)
 let main =
   Arg.parse speclist anon_fun usage_msg;
   let in_ch = open_file !filename in

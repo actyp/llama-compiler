@@ -30,14 +30,20 @@ let rec ty_to_string = function
   | CHAR -> "char"
   | BOOL -> "bool"
   | FLOAT -> "float"
-  | REF (ty, _) -> ty_to_string ty ^ " ref"
-  | DYN_REF (ty, _) -> ty_to_string ty ^ " ref (dynamic)"
-  | ARRAY (ds, ty) -> array_dims_to_string ds ^ " of " ^ ty_to_string ty
-  | FUNC (tys, ret_ty) -> param_tys_to_string tys ^ " -> " ^ ty_to_string ret_ty
+  | REF (ty, _) -> paren ty ^ " ref"
+  | DYN_REF (ty, _) -> paren ty ^ " ref (dynamic)"
+  | ARRAY (ds, ty) -> array_dims_to_string ds ^ " of " ^ paren ty
+  | FUNC (tys, ret_ty) -> param_tys_to_string tys ^ " -> " ^ paren ret_ty
   | USERDEF sym -> S.name sym
   | CONSTR (_, user_ty, _) -> ty_to_string user_ty
   | VAR sym -> S.name sym
   | POLY i -> "'p" ^ string_of_int i
+
+(** [paren ty] returns [ty_to_string ty] in parenthesis when needed *)
+and paren ty =
+  match ty with
+  | REF _ | DYN_REF _  | ARRAY _ | FUNC _ -> "(" ^ ty_to_string ty ^ ")"
+  | _ -> ty_to_string ty
 
 (** [array_dims_to_string ds] converts dim number to stars '*' *)
 and array_dims_to_string ds =
@@ -49,12 +55,7 @@ and array_dims_to_string ds =
   else "array [*" ^ (aux (ds-1) "") ^ "]"
 
 (** [param_tys_to_string tys] converts function parameters to string *)
-and param_tys_to_string tys =
-  let paren ty = match ty with
-    | FUNC _ -> "(" ^ ty_to_string ty ^ ")"
-    | _ -> ty_to_string ty
-  in
-  String.concat " -> " (List.map paren tys)
+and param_tys_to_string tys = String.concat " -> " (List.map paren tys)
 
 (** [is_valid_type t] checks the validity of given type [t] *)
 let rec is_valid_type = function

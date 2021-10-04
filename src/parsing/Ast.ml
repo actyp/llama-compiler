@@ -51,11 +51,11 @@ and expr =
   | E_BOOL         of { value: bool; loc: loc }
   | E_Unit         of loc
   | E_ArrayRef     of { name_sym: symbol; exprs: expr list; loc: loc }
-  | E_FuncCall     of { name_sym: symbol; param_exprs: expr list; loc: loc }
-  | E_ConstrCall   of { name_sym: symbol; param_exprs: expr list; loc: loc }
   | E_ArrayDim     of { dim_opt: int option; name_sym: symbol; loc: loc }
   | E_New          of { ty: _type; loc: loc }
   | E_Delete       of { expr: expr; loc: loc }
+  | E_FuncCall     of { name_sym: symbol; param_exprs: expr list; loc: loc }
+  | E_ConstrCall   of { name_sym: symbol; param_exprs: expr list; loc: loc }
   | E_LetIn        of { letdef: def; in_expr: expr; loc: loc }
   | E_BeginEnd     of { expr: expr; loc: loc }
   | E_MatchedIF    of { if_expr: expr; then_expr: expr; else_expr: expr; loc: loc }

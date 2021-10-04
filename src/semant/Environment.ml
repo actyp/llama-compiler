@@ -116,3 +116,35 @@ let initial_envs () =
   let venv: T.ty_symboltable = List.fold_left augment_env S.empty venv_pairs in
   let tenv: T.ty_symboltable = S.empty in
   venv, tenv
+
+(** [is_valid_binary func_sym param_ty] checks the parameter validity of the single
+    parameter Types.ty [param_ty] of function's Symbol.symbol [func_sym] *)
+let is_valid_binary func_sym param_ty =
+  let non_array_func_ty = function
+    | T.ARRAY _ | T.FUNC _ -> false
+    | _ -> true
+
+  and int_float_char_ty = function
+    | T.INT | T.FLOAT | T.CHAR -> true
+    | _ -> false
+  in
+  match S.name func_sym with
+  | "( = )"  | "( <> )" -> non_array_func_ty param_ty
+  | "( < )"  | "( > )"  -> int_float_char_ty param_ty
+  | "( <= )" | "( >= )" -> int_float_char_ty param_ty
+  | "( == )" | "( != )" -> non_array_func_ty param_ty
+  | _ -> true
+
+(** [hint_str func_sym] returns the corresponding hint string for function
+    with Symbol.symbol [func_sym] *)
+let hint_str func_sym =
+  let hint_of_str str = "Hint: " ^ str
+  and non_array_func_params = "Array and function types are not allowed as parameters"
+  and int_float_char_params = "Only int, float and char types are allowed as parameters"
+  in
+  match S.name func_sym with
+  | "( = )"  | "( <> )" -> hint_of_str non_array_func_params
+  | "( < )"  | "( > )"  -> hint_of_str int_float_char_params
+  | "( <= )" | "( >= )" -> hint_of_str int_float_char_params
+  | "( == )" | "( != )" -> hint_of_str non_array_func_params
+  | _ -> ""

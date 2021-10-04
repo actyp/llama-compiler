@@ -117,3 +117,9 @@ and message fmt =
 let pos_fatal_error loc =
   print_position (err_formatter) (position_context loc);
   fatal
+
+(** [pos_warning_error loc] prints the error location obtained from [loc] and
+    returns [warning] function to apply to remaining arguments *)
+let pos_warning_error loc =
+  print_position (err_formatter) (position_context loc);
+  warning
