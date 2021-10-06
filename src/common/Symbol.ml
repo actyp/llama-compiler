@@ -39,10 +39,25 @@ type 'a symboltable = 'a SymbolTable.t
 (** Empty Symbol Table *)
 let empty = SymbolTable.empty
 
-(** [enter tbl (_, num) bind] adds or overwrites the mapping [num] -> [bind] in Symbol Table [tbl] *)
+(** [enter tbl (_, num) bind] returns a new Symbol Table from [tbl] after
+    adding or overwriting the mapping [num] -> [bind] *)
 let enter (tbl: 'a symboltable) ((_, num): symbol) (bind: 'a): 'a symboltable =
   SymbolTable.add num bind tbl
 
 (** [look tbl (_, num)] returns a binding option of [num]'s mapping in Symbol Table [tbl] *)
 let look (tbl: 'a symboltable) ((_, num): symbol): 'a option =
   SymbolTable.find_opt num tbl
+
+(** [mem tbl (_, num)] returns true if [num] has a binding in Symbol Table [tbl] else false *)
+let mem (tbl: 'a symboltable) ((_, num): symbol): bool =
+  SymbolTable.mem num tbl
+
+(** [remove tbl (_, num)] returns a new Symbol Table from [tbl] after
+    removing the mapping [num] -> [bind] *)
+let remove (tbl: 'a symboltable) ((_, num): symbol): 'a symboltable  =
+  SymbolTable.remove num tbl
+
+(** [map f tbl] returns a new Symbol Table from [tbl] after applying
+    [f] to all bindings *)
+let map (f: 'a -> 'b) (tbl: 'a symboltable) =
+  SymbolTable.map f tbl

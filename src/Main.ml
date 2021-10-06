@@ -65,8 +65,9 @@ let gen_typed_ast in_ch =
   let ast = gen_ast in_ch in
   let venv, tenv = Environment.initial_envs () in
   try
-    let venv', tenv', annotated_ast = Annotate.annotate venv tenv ast in
-    let contree = Constraint.collect venv' tenv' annotated_ast in
+    let env_annotated_ast = Annotate.annotate venv tenv ast in
+    let annotated_ast = TypedAst.tast_from_env_tast env_annotated_ast in
+    let contree = Constraint.collect env_annotated_ast in
     let subst_tbl = Unify.unify_and_solve contree in
     let typed_ast = Substitute.substitute_and_typecheck annotated_ast subst_tbl in
     typed_ast

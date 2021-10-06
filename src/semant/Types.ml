@@ -16,12 +16,15 @@ type ty =
   | DYN_REF of ty * unique          (* dynamically allocated ref *)
   | ARRAY of int * ty               (* dimensions , ty, unique reference *)
   | FUNC of ty list * ty            (* param ty list, return type *)
-  | USERDEF of symbol               (* user-defined type *)
+  | USERDEF of symbol * int         (* user-defined type: symbol, currently active occurence number >= 1 *)
   | CONSTR of ty list * ty * unique (* param ty list and user-defined type *)
   | VAR of symbol                   (* meta-var used for annotation *)
   | POLY of int                     (* meta-var used for polymorphic built-in functions; multiple variables
                                       in the same function differ, if necessary, from integer *)
 [@@deriving show]
+
+(** [ty_symboltable] is the type for symbol -> ty Map *)
+type ty_symboltable = ty S.symboltable
 
 (** [ty_to_string t] converts type t to string *)
 let rec ty_to_string = function
@@ -34,7 +37,7 @@ let rec ty_to_string = function
   | DYN_REF (ty, _) -> paren ty ^ " ref (dynamic)"
   | ARRAY (ds, ty) -> array_dims_to_string ds ^ " of " ^ paren ty
   | FUNC (tys, ret_ty) -> param_tys_to_string tys ^ " -> " ^ paren ret_ty
-  | USERDEF sym -> S.name sym
+  | USERDEF (sym, i) -> if i = 1 then S.name sym else S.name sym ^ " (def #" ^ string_of_int i ^ ")"
   | CONSTR (_, user_ty, _) -> ty_to_string user_ty
   | VAR sym -> S.name sym
   | POLY i -> "'p" ^ string_of_int i
@@ -69,9 +72,6 @@ let rec is_valid_type = function
   | CONSTR (_, _, _) -> false
   | _ -> true
 
-(** [ty_symboltable] is the type for symbol -> ty Map *)
-type ty_symboltable = ty S.symboltable
-
 (** [currvarnum] is the current unused number of fresh variable *)
 let currvarnum = ref 0
 
@@ -84,10 +84,10 @@ let freshVar () =
 
 (** [genericsymnum] is the current unused number of generic unhashed symbol *)
 let genericsymnum = ref 0
-let freshGenericSymbol (name: string) =
+let freshGenericType (name: string) =
   let sym = (name, !genericsymnum) in
   incr genericsymnum;
-  sym
+  USERDEF (sym, 0)
 
 (** [instantiate_func_ty t] return the FUNC type after converting all POLY types in
     function type [t] to fresh vars; if applied to a non function type [t] then [t] is returned *)

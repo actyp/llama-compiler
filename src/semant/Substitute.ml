@@ -20,10 +20,11 @@ and internal_error loc msg_fmt =
 
 (** [error_fmt_strings] string formats for error reporting *)
 type error_fmt_strings = {
-    unsubstituted_var: string;
-    invalid_type: string;
-    func_param: string;
-    match_type: string;
+  unsubstituted_var: string;
+  invalid_type: string;
+  func_param: string;
+  match_type: string;
+  rec_failure: string;
 }
 
 (** [efs] error string formats implementation *)
@@ -31,14 +32,16 @@ let efs = {
   unsubstituted_var = "Unsubstituted type variable(s) in type: %s";
   invalid_type = "Invalid type: %s";
   func_param = "Invalid parameter type: %s";
-  match_type = "Invalid expression type to be matched: %s"
+  match_type = "Invalid expression type to be matched: %s";
+  rec_failure = "Value %s, defined in 'let rec', is not allowed at right-hand side"
 }
 
 (** [hint_strings] string formats for hints on error reporting *)
 type hint_strings = {
   invalid_type: string;
   delete_type: string;
-  match_type: string
+  match_type: string;
+  rec_failure: string;
 }
 
 (** [hnts] hint string formats implementation *)
@@ -47,7 +50,9 @@ let hnts = {
                         function is not allowed to return a function";
   delete_type = "Hint: in delete expression are allowed only dynamically allocated \
                        references created with new";
-  match_type = "Hint: expression to be matched should be of user defined type"
+  match_type = "Hint: expression to be matched should be of user defined type";
+  rec_failure = "Hint: only function bodies are allowed to contain values defined in the \
+                       same 'let rec' definition"
 }
 
 (** [string_fmt str] creates a format from string [str], which contains one substring *)
@@ -63,7 +68,7 @@ let lookup (st: U.subst_tbl) (ty: T.ty) loc =
   and warn_flag = ref false
 
   and generic_ty = function
-    | T.ARRAY (0, _) | T.USERDEF ("user defined", _) -> true
+    | T.ARRAY (0, _) | T.USERDEF (("user defined", _), _) -> true
     | _ -> false
 
   and lookup_aux = function
@@ -76,7 +81,7 @@ let lookup (st: U.subst_tbl) (ty: T.ty) loc =
     | T.DYN_REF (t, u) -> T.DYN_REF ((lookup_aux t), u)
     | T.ARRAY (i, t) -> T.ARRAY (i, lookup_aux t)
     | T.FUNC (param_tys, ret_ty) -> T.FUNC (List.map lookup_aux param_tys, lookup_aux ret_ty)
-    | T.USERDEF sym -> T.USERDEF sym
+    | T.USERDEF (sym, n) -> T.USERDEF (sym, n)
     | T.CONSTR (param_tys, ret_ty, u) -> T.CONSTR (List.map lookup_aux param_tys, lookup_aux ret_ty, u)
     | T.VAR _ as var_ty ->
       begin match H.find_opt st var_ty with
@@ -138,6 +143,96 @@ and validate_after_lookup st ty loc =
   validate ty' loc None;
   ty'
 
+(** [rec_error_check decs] traversing recursive TypedAst.dec list [decs], checks for
+    rec failure error on and uses [fatal_error] on error *)
+let rec_error_check decs =
+  let rec rvenv_add rvenv sym = S.enter rvenv sym ()
+
+  and rvenv_mem rvenv sym = S.mem rvenv sym
+
+  and rvenv_rmv rvenv sym = S.remove rvenv sym
+
+  and check_sym rvenv sym loc =
+    if rvenv_mem rvenv sym
+    then
+      let error_str = efs.rec_failure ^ "\n" ^ hnts.rec_failure in
+      fatal_error loc (string_fmt error_str) (S.name sym)
+
+  and dec_to_rvenv f_rvenv rvenv = function
+    | TA.ConstVarDec { name_sym } | TA.FunctionDec { name_sym }
+    | TA.MutVarDec   { name_sym } | TA.ArrayDec    { name_sym } ->
+      f_rvenv rvenv name_sym
+
+  and check_def_local_rvenv rvenv = function
+    | TA.LetDefNonRec _ | TA.TypeDef _ -> rvenv
+    | TA.LetDefRec { decs } ->
+      let local_rvenv = List.fold_left (dec_to_rvenv rvenv_rmv) rvenv decs in
+      List.iter (check_dec local_rvenv) decs;
+      local_rvenv
+
+  and check_dec rvenv = function
+    | TA.ConstVarDec { value } -> check_expr rvenv value
+    | TA.FunctionDec _ | TA.MutVarDec _ | TA.ArrayDec _ -> ()
+
+  and check_expr rvenv expr =
+    let rec check_expr_aux = function
+      | TA.E_ID { name_sym; loc } ->
+        check_sym rvenv name_sym loc
+      | TA.E_Int _  | TA.E_Float _  -> ()
+      | TA.E_Char _ | TA.E_String _ -> ()
+      | TA.E_BOOL _ | TA.E_Unit _   -> ()
+      | TA.E_ArrayRef { name_sym; exprs; loc } ->
+        check_sym rvenv name_sym loc;
+        List.iter check_expr_aux exprs
+      | TA.E_ArrayDim { name_sym; loc } ->
+        check_sym rvenv name_sym loc
+      | TA.E_New _ -> ()
+      | TA.E_Delete { expr } ->
+        check_expr_aux expr
+      | TA.E_FuncCall { name_sym; param_exprs; loc } ->
+        check_sym rvenv name_sym loc;
+        List.iter check_expr_aux param_exprs
+      | TA.E_ConstrCall { param_exprs } ->
+        List.iter check_expr_aux param_exprs
+      | TA.E_LetIn { letdef; in_expr } ->
+        let local_rvenv = check_def_local_rvenv rvenv letdef in
+        check_expr local_rvenv in_expr
+      | TA.E_BeginEnd { expr } ->
+        check_expr_aux expr
+      | TA.E_MatchedIF { if_expr; then_expr; else_expr } ->
+        List.iter check_expr_aux [if_expr; then_expr; else_expr]
+      | TA.E_WhileDoDone { while_expr; do_expr } ->
+        List.iter check_expr_aux [while_expr; do_expr]
+      | TA.E_ForDoDone { start_expr; end_expr; do_expr } ->
+        List.iter check_expr_aux [start_expr; end_expr; do_expr]
+      | TA.E_MatchWithEnd { match_expr; with_clauses } ->
+        check_expr_aux match_expr;
+        List.iter check_clause with_clauses
+
+    and check_clause = function
+      | TA.BasePattClause { base_pattern; expr } ->
+        let local_rvenv = base_pattern_local_rvenv rvenv base_pattern in
+        check_expr local_rvenv expr
+      | TA.ConstrPattClause { constr_pattern; expr } ->
+        let local_rvenv = constr_pattern_local_rvenv rvenv constr_pattern in
+        check_expr local_rvenv expr
+
+    and base_pattern_local_rvenv rvenv = function
+      | TA.BP_INT _ | TA.BP_FLOAT _ | TA.BP_CHAR _ | TA.BP_BOOL _ -> rvenv
+      | TA.BP_ID { name_sym } -> rvenv_rmv rvenv name_sym
+
+    and constr_pattern_local_rvenv rvenv = function
+      | TA.CP_BASIC { base_patterns } ->
+        List.fold_left base_pattern_local_rvenv rvenv base_patterns
+
+    in
+    check_expr_aux expr
+
+  in
+  let empty_rvenv: unit S.symboltable = S.empty in
+  let rec_venv = List.fold_left (dec_to_rvenv rvenv_add) empty_rvenv decs in
+  List.iter (check_dec rec_venv) decs
+
 (** [substitute_and_typecheck tast st] given the annotated_ast [tast] and the subst_tbl [st]
     traverses the tree and substitutes and typechecks -- when needed-- the type variables
     returning the final typed ast *)
@@ -146,9 +241,12 @@ let substitute_and_typecheck (tast: TA.tast) (st: U.subst_tbl): TA.tast =
   (** [traverse_def d] returns the substituted TypedAst.def from TypedAst.def [d] *)
   let rec traverse_def = function
     | TA.LetDefNonRec { decs; loc } ->
-      TA.LetDefNonRec { decs = List.map traverse_dec decs; loc }
+      let decs' = List.map traverse_dec decs in
+      TA.LetDefNonRec { decs = decs'; loc }
     | TA.LetDefRec { recur; decs; loc } ->
-      TA.LetDefRec { recur; decs = List.map traverse_dec decs; loc }
+      let decs' = List.map traverse_dec decs in
+      rec_error_check decs;
+      TA.LetDefRec { recur; decs = decs'; loc }
     | TA.TypeDef _ as tdef ->
       tdef
 

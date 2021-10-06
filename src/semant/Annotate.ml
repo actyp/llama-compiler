@@ -3,12 +3,6 @@ module TA = TypedAst
 module T = Types
 module S = Symbol
 
-(** [venv] is a mapping from value variables to types *)
-type venv = T.ty_symboltable
-
-(** [tenv] is a mapping from type variables to types *)
-and tenv = T.ty_symboltable
-
 (** [v_error_fmt] format string on unbound value *)
 let v_error_fmt = format_of_string "Unbound value %s"
 
@@ -17,6 +11,13 @@ and t_error_fmt = format_of_string "Unbound type constructor %s"
 
 (** [fatal_error loc] invokes Error.pos_fatal_error [loc] *)
 let fatal_error loc = Error.pos_fatal_error loc
+
+(** [internal_error loc msg_fmt] invokes [Error.pos_fatal_error loc error_fmt] where
+    [error_fmt] is [default_fmt] extended with [msg_fmt] *)
+and internal_error loc msg_fmt =
+  let default_fmt = format_of_string "Internal error: during annotation, " in
+  let error_fmt = default_fmt ^^ msg_fmt in
+  Error.pos_fatal_error loc error_fmt
 
 (** [dim_opt_to_num loc d] returns the number provided from int option [d] in the
     array dim expression. Raises: Error.Terminate using [fatal_error] if the number
@@ -48,7 +49,7 @@ let sym_to_ty loc error_fmt env sym = match S.look env sym with
     Raises: Error.Terminate utilizing [sym_to_ty], [tenv] and [loc] to
     check for unbound user-defined type *)
 let from_ast_type loc tenv ty = match TA.from_ast_type ty with
-  | T.USERDEF ty_sym -> sym_to_ty loc t_error_fmt tenv ty_sym
+  | T.USERDEF (ty_sym, 0) -> sym_to_ty loc t_error_fmt tenv ty_sym
   | _ as t -> t
 
 (** [ty_opt_to_ty loc tenv ty_opt] converts ast [ty_opt] to typed ast type or returns a fresh var
@@ -79,16 +80,22 @@ let annotate_list_seq f_an env ls =
 
 (** [annotate venv tenv ast] returns the augmented venv and tenv and the typed ast
     generated from [venv], [tenv] and [ast] *)
-let rec annotate (venv: venv) (tenv: tenv) (ast: A.ast): venv * tenv * TA.tast =
+let rec annotate (venv: TA.venv) (tenv: TA.tenv) (ast: A.ast):(* TA.venv * TA.tenv * *)TA.env_tast =
   let rec aux venv tenv ast tast = match ast with
-    | []        -> venv, tenv, rev tast
+    | []        -> (*venv, tenv, *)rev tast
     | d :: defs -> match d with
-      | A.LetDef _ ->
+      | A.LetDef { recur_opt = None } ->
         let venv', ad = annotate_let_def venv tenv d in
-        aux venv' tenv defs (ad::tast)
+        let env_node = (venv, tenv, ad) in
+        aux venv' tenv defs (env_node :: tast)
+      | A.LetDef { recur_opt = Some _ } ->
+        let venv', ad = annotate_let_def venv tenv d in
+        let env_node = (venv', tenv, ad) in
+        aux venv' tenv defs (env_node :: tast)
       | A.TypeDef _ ->
         let tenv', ad = annotate_type_def tenv d in
-        aux venv tenv' defs (ad::tast)
+        let env_node = (venv, tenv, ad) in
+        aux venv tenv' defs (env_node :: tast)
   in
   aux venv tenv ast []
 
@@ -105,7 +112,7 @@ and annotate_let_def venv tenv = function
     let adecs = List.map (annotate_rec_dec venv' tenv) decs in
     venv', TA.LetDefRec { recur; decs = adecs; loc}
   | A.TypeDef { loc } ->
-    fatal_error loc "Internal error: annotate_let_def applied to Ast.TypeDef"
+    internal_error loc "Internal error: annotate_let_def applied to Ast.TypeDef"
 
 (** [annotate_type_def tenv def] returns the typed typedef generated from [tenv] and [def] *)
 and annotate_type_def tenv = function
@@ -115,34 +122,39 @@ and annotate_type_def tenv = function
     let tenv', atdecs = annotate_list_seq annotate_tdec tenv_heads tdecs in
     tenv', TA.TypeDef { tdecs = atdecs; loc }
   | A.LetDef { loc } ->
-    fatal_error loc "Internal error: annotate_type_def applied to Ast.LetDef"
+    internal_error loc "Internal error: annotate_type_def applied to Ast.LetDef"
 
 (** [annotate_tdec_funs] is a tuple containing:
     - [augment_tenv tenv d] for augmenting [tenv] with type of type dec [d]
     - [annotate_tdec tenv d] for returning the typed tdec of [d] in [tenv] *)
 and annotate_tdec_funs =
-  let augment_tenv tenv (A.TypeDec { name_sym; constrs; loc }) =
-    S.enter tenv name_sym (T.USERDEF name_sym)
+  let rec augment_tenv tenv (A.TypeDec { name_sym; constrs; loc }) =
+    match S.look tenv name_sym with
+    | None -> S.enter tenv name_sym (T.USERDEF (name_sym, 1))
+    | Some (T.USERDEF (sym, i)) -> S.enter tenv name_sym (T.USERDEF (sym, i+1))
+    | Some _ -> internal_error loc "Internal error: type %s with non Types.USERDEF type" (S.name name_sym)
 
   and annotate_tdec tenv (A.TypeDec { name_sym; constrs; loc }) =
-    let userty = T.USERDEF name_sym in
-    let tenv', aconstrs = annotate_list_seq (annotate_constr userty) tenv constrs in
-    tenv', TA.TypeDec { name_sym; constrs = aconstrs; loc }
-  in
-    augment_tenv, annotate_tdec
+    match S.look tenv name_sym with
+    | None -> internal_error loc "Internal error: annotate_tdec did not found %s in tenv" (S.name name_sym)
+    | Some userty ->
+      let tenv', aconstrs = annotate_list_seq (annotate_constr userty) tenv constrs in
+      tenv', TA.TypeDec { name_sym; constrs = aconstrs; loc }
 
-(** [annotate_constr userty tenv c] returns the typed constr generated from
-    T.types [userty], [tenv] and [c] *)
-and annotate_constr userty tenv = function
-  | A.Constr { name_sym; tys_opt = None; loc } ->
-    let ty = T.CONSTR ([], userty, ref ()) in
-    let tenv' = S.enter tenv name_sym ty in
-    tenv', TA.Constr { ty = ty; name_sym; loc }
-  | A.Constr { name_sym; tys_opt = Some t_list; loc } ->
-    let tys = List.map (from_ast_type loc tenv) t_list in
-    let ty = T.CONSTR (tys, userty, ref ()) in
-    let tenv' = S.enter tenv name_sym ty in
-    tenv', TA.Constr { ty = ty; name_sym; loc }
+  and annotate_constr userty tenv = function
+    | A.Constr { name_sym; tys_opt = None; loc } ->
+      let ty = T.CONSTR ([], userty, ref ()) in
+      let tenv' = S.enter tenv name_sym ty in
+      tenv', TA.Constr { ty = ty; name_sym; loc }
+    | A.Constr { name_sym; tys_opt = Some t_list; loc } ->
+      let tys = List.map (from_ast_type loc tenv) t_list in
+      let ty = T.CONSTR (tys, userty, ref ()) in
+      let tenv' = S.enter tenv name_sym ty in
+      tenv', TA.Constr { ty = ty; name_sym; loc }
+
+  in
+  augment_tenv, annotate_tdec
+
 
 (** [annotate_non_rec_dec_funs] is a tuple containing:
     - [annotate_non_rec_dec venv tenv d] for returning the typed tdec of [d] using [venv], [tenv]
@@ -232,7 +244,7 @@ and annotate_rec_dec_funs =
       let augment_venv venv (TA.Param { ty; name_sym }) = S.enter venv name_sym ty in
       let venv' = List.fold_left augment_venv venv aparams in
       venv', aparams
-    | _ -> fatal_error loc "Internal error: annotate_rec_params applied to non function Types.ty"
+    | _ -> internal_error loc "Internal error: annotate_rec_params applied to non function Types.ty"
   in
   augment_venv, annotate_rec_dec
 

@@ -77,6 +77,18 @@ and constr_pattern =
   CP_BASIC of { ty: T.ty; constr_sym: symbol; base_patterns: base_pattern list; loc: loc }
 [@@deriving show]
 
+(** [venv] is a mapping from value variables to types *)
+type venv = T.ty_symboltable
+
+(** [tenv] is a mapping from type variables to types *)
+and tenv = T.ty_symboltable
+
+(** [env_tast] is the tast but every def node is accompanied by it's starting venv and tenv *)
+and env_tast = (venv * tenv * def) list
+
+(** [tast_from_env_tast env_tast] returns the tast from [env_tast] *)
+let tast_from_env_tast (env_tast: env_tast) = List.map (fun (_, _, d) -> d) env_tast
+
 (** [pprint tast] pretty prints typed ast *)
 let pprint (tast: tast) = Printf.printf "Typed Ast:\n %s\n" (show_tast tast)
 
@@ -90,7 +102,7 @@ let rec from_ast_type (t: Ast._type) = match t with
   | Ast.TY_FUNC _ -> from_func_type t
   | Ast.TY_REF ty -> T.REF (from_ast_type ty, ref ())
   | Ast.TY_ARRAY { dims_num_opt; ty } -> T.ARRAY (dopt_to_num dims_num_opt, (from_ast_type ty))
-  | Ast.TY_ID ty_sym -> T.USERDEF ty_sym
+  | Ast.TY_ID ty_sym -> T.USERDEF (ty_sym, 0)
 
 (** [from_func_type t] returns Types.FUNC type corresponding to Ast.TY_FUNC [t] *)
 and from_func_type t =
