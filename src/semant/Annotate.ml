@@ -15,7 +15,7 @@ let fatal_error loc = Error.pos_fatal_error loc
 (** [internal_error loc msg_fmt] invokes [Error.pos_fatal_error loc error_fmt] where
     [error_fmt] is [default_fmt] extended with [msg_fmt] *)
 and internal_error loc msg_fmt =
-  let default_fmt = format_of_string "Internal error: during annotation, " in
+  let default_fmt = format_of_string "during annotation, " in
   let error_fmt = default_fmt ^^ msg_fmt in
   Error.pos_fatal_error loc error_fmt
 
@@ -112,7 +112,7 @@ and annotate_let_def venv tenv = function
     let adecs = List.map (annotate_rec_dec venv' tenv) decs in
     venv', TA.LetDefRec { recur; decs = adecs; loc}
   | A.TypeDef { loc } ->
-    internal_error loc "Internal error: annotate_let_def applied to Ast.TypeDef"
+    internal_error loc "annotate_let_def applied to Ast.TypeDef"
 
 (** [annotate_type_def tenv def] returns the typed typedef generated from [tenv] and [def] *)
 and annotate_type_def tenv = function
@@ -122,7 +122,7 @@ and annotate_type_def tenv = function
     let tenv', atdecs = annotate_list_seq annotate_tdec tenv_heads tdecs in
     tenv', TA.TypeDef { tdecs = atdecs; loc }
   | A.LetDef { loc } ->
-    internal_error loc "Internal error: annotate_type_def applied to Ast.LetDef"
+    internal_error loc "annotate_type_def applied to Ast.LetDef"
 
 (** [annotate_tdec_funs] is a tuple containing:
     - [augment_tenv tenv d] for augmenting [tenv] with type of type dec [d]
@@ -132,11 +132,11 @@ and annotate_tdec_funs =
     match S.look tenv name_sym with
     | None -> S.enter tenv name_sym (T.USERDEF (name_sym, 1))
     | Some (T.USERDEF (sym, i)) -> S.enter tenv name_sym (T.USERDEF (sym, i+1))
-    | Some _ -> internal_error loc "Internal error: type %s with non Types.USERDEF type" (S.name name_sym)
+    | Some _ -> internal_error loc "type %s with non Types.USERDEF type" (S.name name_sym)
 
   and annotate_tdec tenv (A.TypeDec { name_sym; constrs; loc }) =
     match S.look tenv name_sym with
-    | None -> internal_error loc "Internal error: annotate_tdec did not found %s in tenv" (S.name name_sym)
+    | None -> internal_error loc "annotate_tdec did not found %s in tenv" (S.name name_sym)
     | Some userty ->
       let tenv', aconstrs = annotate_list_seq (annotate_constr userty) tenv constrs in
       tenv', TA.TypeDec { name_sym; constrs = aconstrs; loc }
@@ -244,7 +244,7 @@ and annotate_rec_dec_funs =
       let augment_venv venv (TA.Param { ty; name_sym }) = S.enter venv name_sym ty in
       let venv' = List.fold_left augment_venv venv aparams in
       venv', aparams
-    | _ -> internal_error loc "Internal error: annotate_rec_params applied to non function Types.ty"
+    | _ -> internal_error loc "annotate_rec_params applied to non function Types.ty"
   in
   augment_venv, annotate_rec_dec
 
