@@ -40,14 +40,6 @@ let sym_to_ty loc env sym = match S.look env sym with
   | Some t -> t
   | None -> internal_error loc "%s was not in environment" (S.name sym)
 
-(** [rev l] reverses list [l] in linear time *)
-let rev l =
-  let rec aux acc l = match l with
-    | [] -> acc
-    | h::t -> aux (h::acc) t
-  in
-  aux [] l
-
 (** [augment_venv_dec venv d] augments given [venv] adding the type mapping of dec [d] *)
 let augment_venv_dec venv = function
   | TA.ConstVarDec { ty; name_sym } | TA.FunctionDec { ty; name_sym }
@@ -67,7 +59,7 @@ and augment_venv_base_pattern venv = function
     provided [venv] and [tenv]. [tenv] is shared among all collect functions *)
 let rec collect (env_tast: TA.env_tast): CT.contree =
   let rec aux contree = function
-    | [] -> rev contree
+    | [] -> List.rev contree
     | (venv, tenv, def) :: rest -> match def with
       | TA.LetDefNonRec _ | TA.LetDefRec _ ->
         let con = collect_let_def venv tenv def in
@@ -104,7 +96,7 @@ and collect_let_def_local_venv venv tenv = function
     venv [venv] and TypedAst.dec list [condecs] *)
 and collect_decs venv tenv condecs =
   let rec aux acc = function
-    | [] -> rev acc
+    | [] -> List.rev acc
     | d :: ds -> match d with
       | TA.ConstVarDec _ | TA.FunctionDec _ | TA.ArrayDec _ ->
         aux ((collect_dec venv tenv d) :: acc) ds
@@ -254,7 +246,7 @@ and collect_expr venv tenv e =
   and make_match_cons loc ty match_ty clause_tys =
     let make_inner_cons (p1, e1) pairs =
       let rec aux pcons econs = function
-        | [] ->  (rev pcons, rev econs)
+        | [] ->  (List.rev pcons, List.rev econs)
         | (p, e) :: cs -> aux ((make_con (p, p1)) :: pcons) ((make_con (e, e1)) :: econs) cs
       in
       aux [] [] pairs

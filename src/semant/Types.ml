@@ -96,14 +96,10 @@ let rec instantiate_func_ty = function
     let rec aux poly_fvs acc = function
       | [] ->
         let _, iret = instantiate_ty poly_fvs ret_ty in
-        FUNC (rev [] acc, iret)
+        FUNC (List.rev acc, iret)
       | ty :: tys ->
         let poly_fvs', it = instantiate_ty poly_fvs ty in
         aux poly_fvs' (it :: acc) tys
-
-    and rev acc = function
-      | [] -> acc
-      | h::t -> rev (h::acc) t
 
     and instantiate_ty poly_fvs = function
       | REF (ty, u) ->

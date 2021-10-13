@@ -106,16 +106,12 @@ let rec from_ast_type (t: Ast._type) = match t with
 
 (** [from_func_type t] returns Types.FUNC type corresponding to Ast.TY_FUNC [t] *)
 and from_func_type t =
-  let rec rev acc = function
-   | [] -> acc
-   | l :: ls -> rev (l :: acc) ls
-
-  and aux t params = match t with
+  let rec aux t params = match t with
     | Ast.TY_FUNC { from_ty; to_ty } ->
       let par = from_ast_type from_ty in
       aux to_ty (par::params)
     | ret_ty ->
-      T.FUNC (rev [] params, from_ast_type ret_ty)
+      T.FUNC (List.rev params, from_ast_type ret_ty)
   in
   aux t []
 

@@ -29,15 +29,6 @@ let dim_opt_to_num loc = function
     then num
     else fatal_error loc "Number in dim expression should be greater than 0"
 
-
-(** [rev l] reverses list [l] in linear time *)
-let rev l =
-  let rec aux acc l = match l with
-    | [] -> acc
-    | h::t -> aux (h::acc) t
-  in
-  aux [] l
-
 (** [sym_to_ty loc error_fmt env sym] returns the Types.ty mapping of [sym] in [env]
     Raises: Error.Terminate using [fatal_error] on absent mapping and outputs position
     based on [loc] and a corresponding message based on [error_fmt] *)
@@ -71,7 +62,7 @@ let make_fun_ty aparams ret_ty =
 let annotate_list_seq f_an env ls =
   let rec aux f_an env ls als =
     match ls with
-    | [] -> env, rev als
+    | [] -> env, List.rev als
     | l :: rest ->
       let env', al = f_an env l in
       aux f_an env' rest (al::als)
@@ -82,7 +73,7 @@ let annotate_list_seq f_an env ls =
     generated from [venv], [tenv] and [ast] *)
 let rec annotate (venv: TA.venv) (tenv: TA.tenv) (ast: A.ast):(* TA.venv * TA.tenv * *)TA.env_tast =
   let rec aux venv tenv ast tast = match ast with
-    | []        -> (*venv, tenv, *)rev tast
+    | []        -> List.rev tast
     | d :: defs -> match d with
       | A.LetDef { recur_opt = None } ->
         let venv', ad = annotate_let_def venv tenv d in
