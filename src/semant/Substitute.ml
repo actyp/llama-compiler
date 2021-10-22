@@ -233,9 +233,6 @@ let rec_error_check decs =
   let rec_venv = List.fold_left (dec_to_rvenv rvenv_add) empty_rvenv decs in
   List.iter (check_dec rec_venv) decs
 
-(** [substitute_and_typecheck tast st] given the annotated_ast [tast] and the subst_tbl [st]
-    traverses the tree and substitutes and typechecks -- when needed-- the type variables
-    returning the final typed ast *)
 let substitute_and_typecheck (tast: TA.tast) (st: U.subst_tbl): TA.tast =
 
   (** [traverse_def d] returns the substituted TypedAst.def from TypedAst.def [d] *)

@@ -55,8 +55,6 @@ and augment_venv_base_pattern venv = function
   | TA.BP_INT _ | TA.BP_FLOAT _ | TA.BP_CHAR _ | TA.BP_BOOL _ -> venv
   | TA.BP_ID { ty; name_sym; } -> S.enter venv name_sym ty
 
-(** [collect venv tenv tast] returns the constraint tree of the annotated [tast] using
-    provided [venv] and [tenv]. [tenv] is shared among all collect functions *)
 let rec collect (env_tast: TA.env_tast): CT.contree =
   let rec aux contree = function
     | [] -> List.rev contree

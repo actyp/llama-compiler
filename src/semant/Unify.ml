@@ -63,7 +63,6 @@ exception UnifyError of CT.loc * string * T.ty * T.ty
     and location [loc] are included *)
 exception ParamNumError of CT.loc * string * int * int
 
-(** [subst_tbl] is the type of Types.ty to Types.ty Hashtbl used for Types.VAR to Types.ty mapping *)
 type subst_tbl = (T.ty, T.ty) H.t
 
 (** [subst_tbl] is the hashtable that contains Types.ty -- to be sustituted -- mapping to Types.ty *)
@@ -124,7 +123,6 @@ let replace_subst (st: subst_tbl) (var_ty: T.ty) (latest_ty: T.ty) (new_ty: T.ty
   if var_is_in_tbl
   then replace_var latest_ty new_ty
 
-(** [pprint st] pretty-prints the given subst_tbl [st] *)
 let pprint (st: subst_tbl) =
   let print_pair t1 t2 = Printf.printf "%s |-> %s\n" (T.ty_to_string t1) (T.ty_to_string t2) in
   Printf.printf "Substitutions:\n";
@@ -145,8 +143,6 @@ let rec occurs (var: T.ty) (ty: T.ty) = match var with
   | _ -> false
 
 
-(** [unify_and_solve contree] traverses ConstaintTree.contree [contree], solves the constraints
-    and returns the resulting [subst_tbl] *)
 let unify_and_solve (contree: CT.contree): subst_tbl =
 
   (** [handle_exception unify d] handles exception raises by the call [unify d] *)

@@ -107,7 +107,6 @@ let rec augment_env env = function
   | [] -> env
   | (s, ty) :: rest -> augment_env (S.enter env (S.symbol s) ty) rest
 
-(** [initial_envs ()] returns the initial tenv, venv tuple *)
 let initial_envs () =
   let venv_pairs = [
     unary_operator_functions; binary_operator_functions; io_functions;
@@ -117,8 +116,6 @@ let initial_envs () =
   let tenv: T.ty_symboltable = S.empty in
   venv, tenv
 
-(** [is_valid_binary func_sym param_ty] checks the parameter validity of the single
-    parameter Types.ty [param_ty] of function's Symbol.symbol [func_sym] *)
 let is_valid_binary func_sym param_ty =
   let non_array_func_ty = function
     | T.ARRAY _ | T.FUNC _ -> false
@@ -135,8 +132,6 @@ let is_valid_binary func_sym param_ty =
   | "( == )" | "( != )" -> non_array_func_ty param_ty
   | _ -> true
 
-(** [hint_str func_sym] returns the corresponding hint string for function
-    with Symbol.symbol [func_sym] *)
 let hint_str func_sym =
   let hint_of_str str = "Hint: " ^ str
   and non_array_func_params = "Array and function types are not allowed as parameters"

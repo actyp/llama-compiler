@@ -2,7 +2,7 @@
 
 module T = Types
 
-type loc = Error.lpos * Error.lpos
+type loc = Error.lpos_pair
 [@@deriving show]
 
 type symbol = Symbol.symbol
@@ -77,22 +77,16 @@ and constr_pattern =
   CP_BASIC of { ty: T.ty; constr_sym: symbol; base_patterns: base_pattern list; loc: loc }
 [@@deriving show]
 
-(** [venv] is a mapping from value variables to types *)
 type venv = T.ty_symboltable
 
-(** [tenv] is a mapping from type variables to types *)
 and tenv = T.ty_symboltable
 
-(** [env_tast] is the tast but every def node is accompanied by it's starting venv and tenv *)
 and env_tast = (venv * tenv * def) list
 
-(** [tast_from_env_tast env_tast] returns the tast from [env_tast] *)
 let tast_from_env_tast (env_tast: env_tast) = List.map (fun (_, _, d) -> d) env_tast
 
-(** [pprint tast] pretty prints typed ast *)
 let pprint (tast: tast) = Printf.printf "Typed Ast:\n %s\n" (show_tast tast)
 
-(** [from_ast_type t] converts ast _type [t] to typed ast _type *)
 let rec from_ast_type (t: Ast._type) = match t with
   | Ast.TY_UNIT   -> T.UNIT
   | Ast.TY_INT    -> T.INT
@@ -120,12 +114,10 @@ and dopt_to_num (d: int option) = match d with
   | Some n -> n
   | None -> 1
 
-(** [from_ast_count_dir c] returns the TypedAst.count_dir from Ast.count_dir [c] *)
 and from_ast_count_dir = function
   | Ast.TO loc -> TO loc
   | Ast.DOWNTO loc -> DOWNTO loc
 
-(** [expr_ty e] extracts [ty] from expr [e] *)
 let rec expr_ty = function
   | E_ID { ty } | E_Int { ty } | E_Float { ty } | E_Char { ty } | E_String { ty } | E_BOOL { ty } | E_Unit { ty }
   | E_ArrayRef { ty } | E_ArrayDim { ty } | E_New { ty } | E_Delete { ty } | E_FuncCall { ty } | E_ConstrCall { ty }
@@ -133,17 +125,14 @@ let rec expr_ty = function
   | E_MatchWithEnd { ty } ->
     ty
 
-(** [clause_ty c] extracts [ty] from clause [c] *)
 and clause_tys = function
   | BasePattClause { base_pattern; expr } -> (base_pattern_ty base_pattern, expr_ty expr)
   | ConstrPattClause { constr_pattern; expr } -> (constr_pattern_ty constr_pattern, expr_ty expr)
 
-(** [base_pattern_ty bp] extracts [ty] from base_pattern [bp] *)
 and base_pattern_ty = function
   | BP_INT { ty } | BP_FLOAT { ty } | BP_CHAR { ty }
   | BP_BOOL { ty } | BP_ID { ty } ->
     ty
 
-(** [constr_pattern_ty bp] extracts [ty] from constr_pattern [cp] *)
 and constr_pattern_ty = function
   | CP_BASIC { ty } -> ty

@@ -69,11 +69,9 @@ let annotate_list_seq f_an env ls =
   in
   aux f_an env ls []
 
-(** [annotate venv tenv ast] returns the augmented venv and tenv and the typed ast
-    generated from [venv], [tenv] and [ast] *)
-let rec annotate (venv: TA.venv) (tenv: TA.tenv) (ast: A.ast):(* TA.venv * TA.tenv * *)TA.env_tast =
+let rec annotate (venv: TA.venv) (tenv: TA.tenv) (ast: A.ast): TA.env_tast =
   let rec aux venv tenv ast tast = match ast with
-    | []        -> List.rev tast
+    | [] -> List.rev tast
     | d :: defs -> match d with
       | A.LetDef { recur_opt = None } ->
         let venv', ad = annotate_let_def venv tenv d in

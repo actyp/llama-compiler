@@ -1,14 +1,12 @@
 (** Define  ConstraintTree *)
 
-module T = Types
-
 type symbol = Symbol.symbol
 [@@deriving show]
 
-type loc = Error.lpos * Error.lpos
+type loc = Error.lpos_pair
 [@@deriving show]
 
-type con = Empty | Unify of T.ty * T.ty
+type con = Empty | Unify of Types.ty * Types.ty
 [@@deriving show]
 
 type contree = def list
@@ -47,7 +45,7 @@ and clause =
 [@@deriving show]
 
 and base_pattern =
-  | BP_TRIVIAL of { loc: loc }
+  BP_TRIVIAL of { loc: loc }
 [@@deriving show]
 
 and constr_pattern =

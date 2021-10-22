@@ -12,21 +12,19 @@ type ty =
   | CHAR
   | BOOL
   | FLOAT
-  | REF of ty * unique              (* statically allocated ref *)
-  | DYN_REF of ty * unique          (* dynamically allocated ref *)
-  | ARRAY of int * ty               (* dimensions , ty, unique reference *)
-  | FUNC of ty list * ty            (* param ty list, return type *)
-  | USERDEF of symbol * int         (* user-defined type: symbol, currently active occurence number >= 1 *)
-  | CONSTR of ty list * ty * unique (* param ty list and user-defined type *)
-  | VAR of symbol                   (* meta-var used for annotation *)
-  | POLY of int                     (* meta-var used for polymorphic built-in functions; multiple variables
-                                      in the same function differ, if necessary, from integer *)
+  | REF of ty * unique
+  | DYN_REF of ty * unique
+  | ARRAY of int * ty
+  | FUNC of ty list * ty
+  | USERDEF of symbol * int
+  | CONSTR of ty list * ty * unique
+  | VAR of symbol
+  | POLY of int
+
 [@@deriving show]
 
-(** [ty_symboltable] is the type for symbol -> ty Map *)
 type ty_symboltable = ty S.symboltable
 
-(** [ty_to_string t] converts type t to string *)
 let rec ty_to_string = function
   | UNIT -> "unit"
   | INT -> "int"
@@ -60,7 +58,6 @@ and array_dims_to_string ds =
 (** [param_tys_to_string tys] converts function parameters to string *)
 and param_tys_to_string tys = String.concat " -> " (List.map paren tys)
 
-(** [is_valid_type t] checks the validity of given type [t] *)
 let rec is_valid_type = function
   | REF (ARRAY _, _) | DYN_REF (ARRAY _, _) -> false
   | REF (t, _) | DYN_REF (t, _) -> is_valid_type t
@@ -75,7 +72,6 @@ let rec is_valid_type = function
 (** [currvarnum] is the current unused number of fresh variable *)
 let currvarnum = ref 0
 
-(** [freshVar ()] creates and returns a freshly created Var *)
 let freshVar () =
   let name = "'t" ^ string_of_int !currvarnum in
   let s = S.symbol name in
@@ -84,13 +80,12 @@ let freshVar () =
 
 (** [genericsymnum] is the current unused number of generic unhashed symbol *)
 let genericsymnum = ref 0
+
 let freshGenericType (name: string) =
   let sym = (name, !genericsymnum) in
   incr genericsymnum;
   USERDEF (sym, 0)
 
-(** [instantiate_func_ty t] return the FUNC type after converting all POLY types in
-    function type [t] to fresh vars; if applied to a non function type [t] then [t] is returned *)
 let rec instantiate_func_ty = function
   | FUNC (param_tys, ret_ty) ->
     let rec aux poly_fvs acc = function

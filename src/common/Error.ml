@@ -20,13 +20,16 @@ let pp_lpos ppf (lpos: lpos) = match lpos with
     fprintf ppf "{pos_fname = \"%s\"; pos_lnum = %d; pos_bol = %d; pos_cnum = %d}"
       pos_fname pos_lnum pos_bol pos_cnum
 
+type lpos_pair = lpos * lpos
+[@@deriving show]
+
 type position =
     PosPoint   of lpos
   | PosContext of lpos * lpos
   | PosDummy
 
 let position_point lpos = PosPoint lpos
-let position_context (lpos_start, lpos_end) = PosContext (lpos_start, lpos_end)
+let position_context ((lpos_start, lpos_end): lpos_pair) = PosContext (lpos_start, lpos_end)
 let position_dummy = PosDummy
 
 let print_position ppf pos =
@@ -112,14 +115,10 @@ and message fmt =
   let fmt = "@[<v 2>" ^^ fmt ^^ "@]@;@?" in
   eprintf fmt
 
-(** [pos_fatal_error loc] prints the error location obtained from [loc] and
-    returns [fatal] function to apply to remaining arguments *)
 let pos_fatal_error loc =
   print_position (err_formatter) (position_context loc);
   fatal
 
-(** [pos_warning_error loc] prints the error location obtained from [loc] and
-    returns [warning] function to apply to remaining arguments *)
 let pos_warning_error loc =
   print_position (err_formatter) (position_context loc);
   warning

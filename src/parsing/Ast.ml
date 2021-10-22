@@ -1,6 +1,6 @@
 (** Define Ast *)
 
-type loc = Error.lpos * Error.lpos
+type loc = Error.lpos_pair
 [@@deriving show]
 
 type symbol = Symbol.symbol
