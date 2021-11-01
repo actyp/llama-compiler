@@ -1,26 +1,29 @@
 (** Usage message of llama *)
-let usage_msg = "Usage: llama [--lex-only | --parse-only | --infer-only] <file>"
+let usage_msg = String.concat " " ["Usage:"; Sys.argv.(0); "[-O] [option] filename"]
 
 (** Variable for input file *)
 let filename = ref ""
 
-(** Variable for --lex-only option *)
-let lex_only_opt = ref false
+(** Types of output options *)
+type output_opt = LexOnly | ParseOnly | InferOnly | IR | Asm
 
-(** Variable for --parse-only option*)
-let parse_only_opt = ref false
+(** Variable for option selection *)
+let output_opt: output_opt ref = ref Asm
 
-(** Variable for --infer-only option*)
-let infer_only_opt = ref false
+(** [select_opt outp _] changes the value of [output_opt] to [outp] *)
+let select_opt outp _ = output_opt := outp
 
-(** Function applied to filename provided *)
-let anon_fun f = filename := f
+let optmz_flag = ref false
 
 (** command line options for llama *)
-let speclist = [
-  ("--lex-only", Arg.Set lex_only_opt, "Lexical analysis only");
-  ("--parse-only", Arg.Set parse_only_opt, "Parsing and printing AST only");
-  ("--infer-only", Arg.Set infer_only_opt, "Printing type-inferred AST only");
+let speclist = Arg.align [
+  ("\nOptions & flags:", Arg.Unit ignore, " ");
+  ("-O", Arg.Set optmz_flag, " Optimization flag");
+  ("-i", Arg.Unit (select_opt IR), " Output of LLVM IR to std_out");
+  ("-f", Arg.Unit (select_opt IR), " Output of assembly to std_out");
+  ("--lex-only", Arg.Unit (select_opt LexOnly) , " Lexical analysis only");
+  ("--parse-only", Arg.Unit (select_opt ParseOnly), " Parsing and printing AST only");
+  ("--infer-only", Arg.Unit (select_opt InferOnly), " Printing type-inferred AST only");
 ]
 
 (** [close_exit in_ch cd] closes abruptly channel [in_ch] and exits with code [cd] *)
@@ -67,31 +70,49 @@ let gen_typed_ast in_ch =
   try
     let env_annotated_ast = Annotate.annotate venv tenv ast in
     let annotated_ast = TypedAst.tast_from_env_tast env_annotated_ast in
-    let contree = Constraint.collect env_annotated_ast in
-    let subst_tbl = Unify.unify_and_solve contree in
-    let typed_ast = Substitute.substitute_and_typecheck annotated_ast subst_tbl in
-    typed_ast
+    env_annotated_ast
+    |> Constraint.collect
+    |> Unify.unify_and_solve
+    |> Substitute.substitute_and_typecheck annotated_ast
   with Error.Terminate ->
     close_exit in_ch 1
 
 (** [infer_only_fun in_ch] generates and pretty prints the TypedAST of input channel [in_ch] *)
 let infer_only_fun in_ch = TypedAst.pprint (gen_typed_ast in_ch)
 
-(** [open_file f] tries to open file [f] handling any system error exception *)
-let open_file f =
+(** [gen_ir in_ch] generates the LLVM IR given the input channel [in_ch] *)
+let gen_ir in_ch optmz =
+  let tast = gen_typed_ast in_ch in
   try
-    open_in f
-  with Sys_error(msg) ->
-    Printf.printf "System error: %s\n" msg;
-    exit(1)
+    tast
+    |> AConversion.convert
+    |> Escape.analyse
+  with Error.Terminate ->
+    close_exit in_ch 1
+
+(** [ir_opt_fun in_ch] generates and outputs to std_out the LLVM IR of input channel [in_ch] *)
+let ir_opt_fun in_ch optmz = Escape.pprint (gen_ir in_ch optmz)
+
+(** [parse_cmd_line ()] parses command line arguments and returns the in_channel
+    after opening [filename], while handling any error occured *)
+let parse_cmd_line () =
+  try
+    Arg.parse speclist (fun f -> filename := f) usage_msg;
+    if !filename <> ""
+    then open_in !filename
+    else raise (Sys_error ("filename is empty"))
+  with
+    Sys_error msg ->
+      Printf.eprintf "%s: %s.\n" Sys.argv.(0) msg;
+      Arg.usage speclist usage_msg;
+      exit(1)
 
 (** [main] parses command line arguments and behaves accordingly *)
 let main =
-  Arg.parse speclist anon_fun usage_msg;
-  let in_ch = open_file !filename in
-  if !lex_only_opt
-  then lex_only_fun in_ch
-  else if !parse_only_opt
-  then parse_only_fun in_ch
-  else if !infer_only_opt
-  then infer_only_fun in_ch
+  let in_ch = parse_cmd_line () in
+  match !output_opt with
+  | LexOnly -> lex_only_fun in_ch
+  | ParseOnly -> parse_only_fun in_ch
+  | InferOnly -> infer_only_fun in_ch
+  | IR -> ir_opt_fun in_ch !optmz_flag
+  | Asm -> ()

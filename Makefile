@@ -2,7 +2,7 @@
 
 default: llama
 
-OCB_FLAGS = -use-ocamlfind -use-menhir -Is src,src/parsing,src/semant,src/common
+OCB_FLAGS = -use-ocamlfind -use-menhir -Is src,src/parsing,src/semant,src/intermediate,src/common
 OCB = ocamlbuild $(OCB_FLAGS)
 
 clean:
