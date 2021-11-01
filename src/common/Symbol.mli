@@ -1,4 +1,4 @@
-(** symbol type: name string and int mapping *)
+(** symbol type: name string and int (> 0) mapping *)
 type symbol = string * int
 
 (** [symbol name] takes a string [name] and returns the used or newly added symbol *)
@@ -7,8 +7,14 @@ val symbol : string -> symbol
 (** [pp_symbol fmt sym] pretty prints symbol [sym] with formatter [fmt] *)
 val pp_symbol : Format.formatter -> symbol -> unit
 
-(** [name (s,n)] returns the name string [s] of the symbol *)
+(** [name sym] returns the name string of the symbol [sym] *)
 val name : symbol -> string
+
+(** [name sym] returns the int mapping of the symbol [sym] *)
+val num : symbol -> int
+
+(** [clear_symbols ()] 'forgets' symbols and int mappings *)
+val clear_symbols : unit -> unit
 
 (** Polymorphic Symbol Table type *)
 type 'a symboltable

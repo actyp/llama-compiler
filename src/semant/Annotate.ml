@@ -12,12 +12,12 @@ and t_error_fmt = format_of_string "Unbound type constructor %s"
 (** [fatal_error loc] invokes Error.pos_fatal_error [loc] *)
 let fatal_error loc = Error.pos_fatal_error loc
 
-(** [internal_error loc msg_fmt] invokes [Error.pos_fatal_error loc error_fmt] where
+(** [internal_error loc msg_fmt] invokes [Error.pos_internal_error loc error_fmt] where
     [error_fmt] is [default_fmt] extended with [msg_fmt] *)
 and internal_error loc msg_fmt =
   let default_fmt = format_of_string "during annotation, " in
   let error_fmt = default_fmt ^^ msg_fmt in
-  Error.pos_fatal_error loc error_fmt
+  Error.pos_internal_error loc error_fmt
 
 (** [dim_opt_to_num loc d] returns the number provided from int option [d] in the
     array dim expression. Raises: Error.Terminate using [fatal_error] if the number

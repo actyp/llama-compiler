@@ -11,12 +11,12 @@ let fatal_error loc = Error.pos_fatal_error loc
 (** [warning_error loc] invokes Error.pos_warning_error [loc] *)
 and warning_error loc = Error.pos_warning_error loc
 
-(** [internal_error loc msg_fmt] invokes [Error.pos_fatal_error loc error_fmt] where
+(** [internal_error loc msg_fmt] invokes [Error.pos_internal_error loc error_fmt] where
     [error_fmt] is [default_fmt] extended with [msg_fmt] *)
 and internal_error loc msg_fmt =
-  let default_fmt = format_of_string "Internal error: during substitution, " in
+  let default_fmt = format_of_string "during substitution, " in
   let error_fmt = default_fmt ^^ msg_fmt in
-  Error.pos_fatal_error loc error_fmt
+  Error.pos_internal_error loc error_fmt
 
 (** [error_fmt_strings] string formats for error reporting *)
 type error_fmt_strings = {

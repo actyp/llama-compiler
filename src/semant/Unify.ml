@@ -5,12 +5,12 @@ module T = Types
 (** [fatal_error loc] invokes Error.pos_fatal_error [loc] *)
 let fatal_error loc = Error.pos_fatal_error loc
 
-(** [internal_error msg_fmt] invokes [Error.pos_fatal error_fmt] where
+(** [internal_error msg_fmt] invokes [Error.internal error_fmt] where
     [error_fmt] is [default_fmt] extended with [msg_fmt] *)
 and internal_error msg_fmt =
-  let default_fmt = format_of_string "Internal error: during unification, " in
+  let default_fmt = format_of_string "during unification, " in
   let error_fmt = default_fmt ^^ msg_fmt in
-  Error.fatal error_fmt
+  Error.internal error_fmt
 
 (** [error_fmt_strings] string formats for error reporting *)
 type error_fmt_strings = {

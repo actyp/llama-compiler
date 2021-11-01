@@ -26,12 +26,12 @@ let make_con (found, expected) =
   | Some _, _ | _, Some _  -> CT.Empty
   | None, None -> H.add con_lookup_tbl con (); con
 
-(** [internal_error loc msg_fmt] invokes [Error.pos_fatal_error loc error_fmt] where
+(** [internal_error loc msg_fmt] invokes [Error.pos_internal_error loc error_fmt] where
     [error_fmt] is [default_fmt] extended with [msg_fmt] *)
 let internal_error loc msg_fmt =
-  let default_fmt = format_of_string "Internal error: during constraint generation, " in
+  let default_fmt = format_of_string "during constraint generation, " in
   let error_fmt = default_fmt ^^ msg_fmt in
-  Error.pos_fatal_error loc error_fmt
+  Error.pos_internal_error loc error_fmt
 
 (** [sym_to_ty loc env sym] returns the Types.ty mapping of [sym] in [env]
     Raises: Error.Terminate using [internal_error] on absent mapping and outputs

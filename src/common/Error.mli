@@ -23,10 +23,9 @@ val position_dummy : position
 (** [print_position fmt pos] prints with formatter [fmt] position [pos] *)
 val print_position : Format.formatter -> position -> unit
 
-(** [internal_raw (fname, lnum) fmt [args]] prints internal error message based on
-    filename string [fname] and line number [lnum] and applies [args] to formatter [fmt].
+(** [internal fmt [args]] prints internal error and applies [args] to formatter [fmt]
     Raises: Terminate *)
-val internal_raw : string * int -> ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
+val internal : ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
 (** [fatal fmt [args]] prints fatal error and applies [args] to formatter [fmt]
     Raises: Terminate *)
@@ -42,6 +41,11 @@ val warning : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 
 (** [message fmt [args]] prints the message applying [args] to formatter [fmt] *)
 val message : ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
+
+(** [pos_internal_error lpos_pair] prints the error location obtained from [lpos_pair]
+    and returns [internal] function to apply to remaining arguments *)
+val pos_internal_error :
+  lpos_pair -> ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 
 (** [pos_fatal_error lpos_pair] prints the error location obtained from [lpos_pair]
     and returns [fatal] function to apply to remaining arguments *)

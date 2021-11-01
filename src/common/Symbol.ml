@@ -22,7 +22,11 @@ let symbol name: symbol =
 
 let name ((s, _): symbol) = s
 
-(** Symbol Table mapping int (obtained from hashed symbol) to value or type binding *)
+let num ((_, n): symbol) = n
+
+let clear_symbols () = H.clear hashtable; currsymnum := 1
+
+(** Symbol Table mapping int (obtained from hashed symbol) to some binding *)
 module SymbolTable = Map.Make(
   struct
     type t = int

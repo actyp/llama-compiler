@@ -69,12 +69,11 @@ let no_out buf pos len = ()
 let no_flush () = ()
 let null_formatter = make_formatter no_out no_flush
 
-let internal_raw (fname, lnum) fmt =
-  let fmt = "@[<v 2>" ^^ fmt ^^ "@]@;@?" in
+let internal fmt =
+  let fmt = "@[<v 2>Internal error: " ^^ fmt ^^ "@]@;@?" in
   incr numErrors;
   let cont ppf =
     raise Terminate in
-  eprintf "Internal error occurred at %s:%d,@ " fname lnum;
   kfprintf cont err_formatter fmt
 
 and fatal fmt =
@@ -115,10 +114,14 @@ and message fmt =
   let fmt = "@[<v 2>" ^^ fmt ^^ "@]@;@?" in
   eprintf fmt
 
-let pos_fatal_error loc =
+let pos_internal_error loc =
   print_position (err_formatter) (position_context loc);
   fatal
 
-let pos_warning_error loc =
+and pos_fatal_error loc =
+  print_position (err_formatter) (position_context loc);
+  fatal
+
+and pos_warning_error loc =
   print_position (err_formatter) (position_context loc);
   warning
