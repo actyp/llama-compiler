@@ -1,29 +1,29 @@
-(** Usage message of llama *)
+(** Usage message of llamac *)
 let usage_msg = String.concat " " ["Usage:"; Sys.argv.(0); "[-O] [option] filename"]
 
 (** Variable for input file *)
 let filename = ref ""
 
 (** Types of output options *)
-type output_opt = LexOnly | ParseOnly | InferOnly | IR | Asm
+type output_opt = Lex | Parse | Infer | IR | Asm | ToFiles
 
 (** Variable for option selection *)
-let output_opt: output_opt ref = ref Asm
+let output_opt: output_opt ref = ref ToFiles
 
 (** [select_opt outp _] changes the value of [output_opt] to [outp] *)
 let select_opt outp _ = output_opt := outp
 
 let optmz_flag = ref false
 
-(** command line options for llama *)
+(** command line options *)
 let speclist = Arg.align [
   ("\nOptions & flags:", Arg.Unit ignore, " ");
   ("-O", Arg.Set optmz_flag, " Optimization flag");
   ("-i", Arg.Unit (select_opt IR), " Output of LLVM IR to std_out");
-  ("-f", Arg.Unit (select_opt IR), " Output of assembly to std_out");
-  ("--lex-only", Arg.Unit (select_opt LexOnly) , " Lexical analysis only");
-  ("--parse-only", Arg.Unit (select_opt ParseOnly), " Parsing and printing AST only");
-  ("--infer-only", Arg.Unit (select_opt InferOnly), " Printing type-inferred AST only");
+  ("-f", Arg.Unit (select_opt Asm), " Output of assembly to std_out");
+  ("--lex", Arg.Unit (select_opt Lex) , " Lexical analysis only");
+  ("--parse", Arg.Unit (select_opt Parse), " Parsing and printing AST only");
+  ("--infer", Arg.Unit (select_opt Infer), " Printing type-inferred AST only");
 ]
 
 (** [close_exit in_ch cd] closes abruptly channel [in_ch] and exits with code [cd] *)
@@ -90,8 +90,8 @@ let gen_ir in_ch optmz =
   with Error.Terminate ->
     close_exit in_ch 1
 
-(** [ir_opt_fun in_ch] generates and outputs to std_out the LLVM IR of input channel [in_ch] *)
-let ir_opt_fun in_ch optmz = Escape.pprint (gen_ir in_ch optmz)
+(** [ir_out_fun in_ch] generates and outputs to std_out the LLVM IR of input channel [in_ch] *)
+let ir_out_fun in_ch optmz = Escape.pprint (gen_ir in_ch optmz)
 
 (** [parse_cmd_line ()] parses command line arguments and returns the in_channel
     after opening [filename], while handling any error occured *)
@@ -111,8 +111,9 @@ let parse_cmd_line () =
 let main =
   let in_ch = parse_cmd_line () in
   match !output_opt with
-  | LexOnly -> lex_only_fun in_ch
-  | ParseOnly -> parse_only_fun in_ch
-  | InferOnly -> infer_only_fun in_ch
-  | IR -> ir_opt_fun in_ch !optmz_flag
+  | Lex -> lex_only_fun in_ch
+  | Parse -> parse_only_fun in_ch
+  | Infer -> infer_only_fun in_ch
+  | IR -> ir_out_fun in_ch !optmz_flag
   | Asm -> ()
+  | ToFiles -> ()

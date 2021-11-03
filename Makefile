@@ -11,7 +11,7 @@ clean:
 llama: sanity
 	@echo --------Compiling llama-----------
 	$(OCB) Main.native
-	@mv Main.native llama
+	@mv Main.native llamac
 
 sanity:
 	@echo --------Sanity Check--------
