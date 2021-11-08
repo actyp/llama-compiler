@@ -12,7 +12,7 @@ type ty =
   | FLOAT
   | REF of ty * unique              (* statically allocated ref *)
   | DYN_REF of ty * unique          (* dynamically allocated ref *)
-  | ARRAY of int * ty               (* dimensions , ty, unique reference *)
+  | ARRAY of int * ty               (* dimensions, ty *)
   | FUNC of ty list * ty            (* param ty list, return type *)
   | USERDEF of symbol * int         (* user-defined type: symbol, currently active occurence number >= 1 *)
   | CONSTR of ty list * ty * unique (* param ty list and user-defined type *)
