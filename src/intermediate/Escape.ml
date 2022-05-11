@@ -64,8 +64,10 @@ let add_var_to_func_list (tbl: temp_info_tbl_t) func_sym (name_sym, ty) =
   match tbl_find_opt tbl func_sym with
   | Some (TempFuncInfo { dec_depth; esc_list }) ->
     add_temp_fun_to_tbl tbl func_sym dec_depth (new_var :: esc_list)
-  | Some (TempVarInfo _) -> internal_error "symbol with TempVarInfo binding to add_var_to_func_list"
-  | None -> internal_error "unbound symbol in tbl to add_var_to_func_list"
+  | Some (TempVarInfo _) -> 
+    internal_error "symbol with TempVarInfo binding to add_var_to_func_list"
+  | None -> 
+    internal_error "unbound symbol in tbl to add_var_to_func_list"
 
 (** [esc_check_temp_var tbl name_sym use_depth] obtains the [TempVarInfo] from [tbl]
     associated to [name_sym] in order to update it's [esc_flag] to true, unless it is already *)

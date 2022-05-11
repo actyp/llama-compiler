@@ -13,7 +13,7 @@ type name_gens = {
   pattern: string * int ref;
 }
 
-(** [gen] is and implementation of name generators *)
+(** [gen] is an implementation of name generators *)
 let gen = {
   const_var = ("cv", ref 0);
   func = ("fn", ref 0);
@@ -41,7 +41,7 @@ let fresh_sym gen name_sym = S.symbol (fresh_name gen name_sym)
     [name_sym] -> [name_sym'] *)
 let add_name_sym senv name_sym name_sym' = S.enter senv name_sym name_sym'
 
-(** [lookup_sym senv name_sym] returns the name_sym' mapping of [name_sym] in [senv]
+(** [lookup_sym senv name_sym] returns the name_sym mapping of [name_sym] in [senv]
     or the same [name_sym] if [name_sym] is not in [senv] -- useful with external
     functions that are not renamed *)
 let lookup_sym senv name_sym = match S.look senv name_sym with
