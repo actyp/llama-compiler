@@ -1,5 +1,5 @@
 (** Usage message of llamac *)
-let usage_msg = String.concat " " ["Usage:"; Sys.argv.(0); "[-O] [option] filename"]
+let usage_msg = String.concat " " ["Usage:"; Sys.argv.(0); "[-flag] [--option] filename"]
 
 (** Variable for input file *)
 let filename = ref ""
@@ -17,7 +17,7 @@ let optmz_flag = ref false
 
 (** command line options *)
 let speclist = Arg.align [
-  ("\nOptions & flags:", Arg.Unit ignore, " ");
+  ("\nFlags & Options:", Arg.Unit ignore, " ");
   ("-O", Arg.Set optmz_flag, " Optimization flag");
   ("-i", Arg.Unit (select_opt IR), " Output of LLVM IR to std_out");
   ("-f", Arg.Unit (select_opt Asm), " Output of assembly to std_out");
@@ -84,14 +84,15 @@ let infer_only_fun in_ch = TypedAst.pprint (gen_typed_ast in_ch)
 let gen_ir in_ch optmz =
   let tast = gen_typed_ast in_ch in
   try
-    tast
-    |> AConversion.convert
+    let conv_tast = AConversion.convert tast in
+    conv_tast
     |> Escape.analyse
+    |> IRCodegen.generate_ir optmz conv_tast
   with Error.Terminate ->
     close_exit in_ch 1
 
 (** [ir_out_fun in_ch] generates and outputs to std_out the LLVM IR of input channel [in_ch] *)
-let ir_out_fun in_ch optmz = Escape.pprint (gen_ir in_ch optmz)
+let ir_out_fun in_ch optmz = IRCodegen.pprint (gen_ir in_ch optmz)
 
 (** [parse_cmd_line ()] parses command line arguments and returns the in_channel
     after opening [filename], while handling any error occured *)

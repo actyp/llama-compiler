@@ -1,1 +1,1 @@
-true: use_menhir, explain, package(ppx_deriving.std)
+true: use_menhir, explain, package(ppx_deriving.std), package(llvm), package(llvm.analysis)
