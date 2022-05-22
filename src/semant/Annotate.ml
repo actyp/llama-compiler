@@ -19,16 +19,6 @@ and internal_error loc msg_fmt =
   let error_fmt = default_fmt ^^ msg_fmt in
   Error.pos_internal_error loc error_fmt
 
-(** [dim_opt_to_num loc d] returns the number provided from int option [d] in the
-    array dim expression. Raises: Error.Terminate using [fatal_error] if the number
-    provided is less than 1 *)
-let dim_opt_to_num loc = function
-  | None -> 1
-  | Some num ->
-    if num > 0
-    then num
-    else fatal_error loc "Number in dim expression should be greater than 0"
-
 (** [sym_to_ty loc error_fmt env sym] returns the Types.ty mapping of [sym] in [env]
     Raises: Error.Terminate using [fatal_error] on absent mapping and outputs position
     based on [loc] and a corresponding message based on [error_fmt] *)
@@ -55,6 +45,26 @@ let make_fun_ty aparams ret_ty =
   let ty_from_Param (TA.Param { ty }) = ty in
   let param_tys = List.map ty_from_Param aparams in
   T.FUNC (param_tys, ret_ty)
+
+
+(** [dim_opt_to_num loc venv name_sym d] returns the number provided from int option [d] in the
+    array dim expression. Uses [venv] and sym_to_ty to find min and max values from [name_sym]
+    that should have type T.ARRAY. Boundary values are min_dim and max_dim. 
+    Raises: Error.Terminate using [fatal_error] if the number provided is not in range [min_dim, max_dim] *)
+    let dim_opt_to_num loc venv name_sym = function
+    | None -> 1
+    | Some num ->
+      let name = (S.name name_sym) in
+      let min_dim = 1 in
+      let max_dim = match sym_to_ty loc v_error_fmt venv name_sym with
+      | T.ARRAY (dims, _) -> dims
+      | T.VAR _ | T.POLY _ -> num (* unknown array size until now, so max_dim == num provided *)
+      | _ as other_ty -> 
+        internal_error loc "%s expected type of Types.ARRAY, instead found %s" name (T.ty_to_string other_ty)
+      in
+      if num >= min_dim && num <= max_dim
+      then num
+      else fatal_error loc "Number in dim expression should be in [%d, %d], based on dimensions of %s" min_dim max_dim name
 
 (** [annotate_list_seq f_an env ls] applies annotation function [f_an] sequentially
     to each member of ast nodes in list [ls] starting with initial env [env] and
@@ -263,8 +273,7 @@ and annotate_expr venv tenv expr =
       let aexprs = List.map annotate_expr_aux exprs in
       TA.E_ArrayRef { ty = ty; name_sym; exprs = aexprs; loc }
     | A.E_ArrayDim { dim_opt; name_sym; loc } ->
-      ignore(sym_to_ty loc v_error_fmt venv name_sym);
-      let dim = dim_opt_to_num loc dim_opt in
+      let dim = dim_opt_to_num loc venv name_sym dim_opt in
       TA.E_ArrayDim {ty = T.INT; dim = dim; name_sym; loc }
     | A.E_New { ty; loc } ->
       TA.E_New { ty = T.DYN_REF (from_ast_type loc tenv ty, ref ()); loc }
