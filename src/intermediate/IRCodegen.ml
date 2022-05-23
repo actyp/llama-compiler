@@ -34,8 +34,8 @@ and function_frames_is_empty () = Stack.is_empty function_frames
   
 let pprint (llmodule: L.llmodule): unit = L.dump_module llmodule
 
-let print_lltype lltype = Printf.printf "lltype: %s\n" (L.string_of_lltype lltype); flush stdout
-and print_llvalue llvalue = Printf.printf "llvalue: %s\n" (L.string_of_llvalue llvalue); flush stdout
+let print_lltype msg lltype = Printf.printf "%s lltype: %s\n" msg (L.string_of_lltype lltype); flush stdout
+and print_llvalue msg llvalue = Printf.printf "%s llvalue: %s\n" msg (L.string_of_llvalue llvalue); flush stdout
 
 let ctx = L.global_context ()
 let the_module = L.create_module ctx "llama"
@@ -83,11 +83,11 @@ let rec find_declaration_frame current_frame curr_depth dec_depth =
   then current_frame
   else begin
     let parent_frame_addr = L.build_struct_gep current_frame 0 "parent_frame_addr" builder in
-    let parent_frame = L.build_load parent_frame_addr "parent_frame builder" builder in
+    let parent_frame = L.build_load parent_frame_addr "parent_frame_temp_load" builder in
     find_declaration_frame parent_frame (curr_depth - 1) dec_depth
   end
 
-let find_llvalue_addr_of_var name_sym info_tbl current_depth = 
+let find_llvalue_addr_of_var name_sym current_depth info_tbl = 
   let func_internal_error expected found =
     internal_error_of_msg_format None expected found "find_llvalue_addr_of_var" (S.name name_sym)
   in
@@ -100,28 +100,54 @@ let find_llvalue_addr_of_var name_sym info_tbl current_depth =
     | None -> func_internal_error "local" "None" (* should have been allocated on it's function entry block *)
     | Some llvalue_addr -> llvalue_addr
     end
-  | Some E.EscVarInfo { dec_depth: int; frame_offset: int } ->
+  | Some E.EscVarInfo { dec_depth; frame_offset } ->
     let name = S.name name_sym in
     let current_frame = function_frames_top () in
     let declaration_frame = find_declaration_frame current_frame current_depth dec_depth in
-    let load_addr = L.build_gep declaration_frame [| const_int 0; const_int frame_offset |] (name ^ ":temp_gep") builder in
-    L.build_load load_addr (name ^ ":temp_load") builder
+    print_llvalue "declaration_frame" declaration_frame;
+    let load_addr = L.build_struct_gep declaration_frame (1 + frame_offset) (name ^ ":temp_gep") builder in
+    print_llvalue "load_addr" load_addr;
+    load_addr
 
-
+let find_function_in_module name_sym = match L.lookup_function (S.name name_sym) the_module with
+    | Some f -> f
+    | None -> internal_error None "function %s not found in the_module" (S.name name_sym)
+  
 let build_frame_alloc func_name_sym esc_list =
   let esc_list_lltypes = List.map (fun (_, ty) -> lltype_of_ty ty) esc_list in
   let parent_struct_ptr_type = if function_frames_is_empty () 
-    then bool_type 
-    else function_frames_top () |> L.type_of |> L.pointer_type in
+    then L.pointer_type bool_type 
+    else L.type_of (function_frames_top ()) (* stored addr is already a pointer*) in
+  print_lltype (S.name func_name_sym ^ " parent_struct_ptr") parent_struct_ptr_type;
   let frame_type = struct_type (Array.of_list (parent_struct_ptr_type :: esc_list_lltypes)) in
-  print_lltype frame_type;
+  print_lltype "frame_type" frame_type;
   let frame_addr = L.build_alloca frame_type (S.name func_name_sym ^ ":frame") builder in
   function_frames_push frame_addr;
   frame_addr
 
-let build_func_frame_vars name_sym ret_lltype param_lltype_list info_tbl =
+let declare_function name_sym func_ty =
+  let func_internal_error expected found name_sym =
+    internal_error_of_msg_format None expected found "declare_function" (S.name name_sym)
+  in
+  let ret_lltype, param_lltype_list = match func_ty with
+    | T.FUNC (param_tys, ret_ty) -> lltype_of_ty ret_ty, List.map lltype_of_ty param_tys
+    | _ -> func_internal_error "Types.FUNC" "other type" name_sym
+  in
+  let func_type = L.function_type ret_lltype (Array.of_list param_lltype_list) in
+  let func = L.declare_function (S.name name_sym) func_type the_module in
+  L.set_gc (Some "ocaml") func;
+  func
+
+
+let build_func_frame_vars name_sym func_ty info_tbl =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "build_func_frame_vars" (S.name name_sym)
+  in
+  let local_list, esc_list = match E.tbl_find_opt info_tbl name_sym with
+    | None -> func_internal_error "function" "None" name_sym
+    | Some E.LocalVarInfo _ -> func_internal_error "function" "LocalVarInfo" name_sym
+    | Some E.EscVarInfo _ -> func_internal_error "function" "EscVarInfo" name_sym
+    | Some E.FuncInfo { local_list; esc_list } -> local_list, esc_list
   in
   let add_llvalue_of_local_var name_sym llvalue = match E.tbl_find_opt info_tbl name_sym with
     | None -> func_internal_error "local" "None" name_sym
@@ -137,24 +163,28 @@ let build_func_frame_vars name_sym ret_lltype param_lltype_list info_tbl =
       add_llvalue_of_local_var name_sym llvalue;
       alloc_locals rest
   in
-  let local_list, esc_list = match E.tbl_find_opt info_tbl name_sym with
-    | None -> func_internal_error "function" "None" name_sym
-    | Some E.LocalVarInfo _ -> func_internal_error "function" "LocalVarInfo" name_sym
-    | Some E.EscVarInfo _ -> func_internal_error "function" "EscVarInfo" name_sym
-    | Some E.FuncInfo { local_list; esc_list } -> local_list, esc_list
+  let func = match L.lookup_function (S.name name_sym) the_module with
+    | Some f -> f (* already declared, found in recursive declaration *)
+    | None -> declare_function name_sym func_ty (* undeclared, time for declaration *)
   in
-  let func_type = L.function_type ret_lltype (Array.of_list param_lltype_list) in
-  let func = L.declare_function (S.name name_sym) func_type the_module in
-  L.set_gc (Some "ocaml") func;
-  let entry_point = L.append_block ctx "entry" func in
-  L.position_at_end entry_point builder;
+  let entry_block = L.append_block ctx "entry" func in
+  let body_block = L.append_block ctx "body" func in
+  L.position_at_end entry_block builder;
   ignore(build_frame_alloc name_sym esc_list);
-  alloc_locals local_list
+  alloc_locals local_list;
+  ignore(L.build_br body_block builder);
+  ignore(L.position_at_end body_block builder);
+  body_block
+
+let build_func_return body_block ret_llvalue =
+  L.position_at_end body_block builder;
+  ignore(L.build_ret ret_llvalue builder);
+  ignore(function_frames_pop ())
 
 let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dims_len_llvalues =
   let store_to_struct ll_struct index value =
     let addr = L.build_struct_gep ll_struct index "tmp_struct_store_addr" builder in
-    print_llvalue addr;
+    print_llvalue "addr" addr;
     ignore(L.build_store value addr builder)
   in
   let array_addr = match array_addr_opt with
@@ -162,50 +192,45 @@ let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dim
   | None ->
     (* calculate size as multiplication of dims *)
     let array_size = List.fold_left (fun acc d -> L.build_mul d acc "tmp_array_size" builder) (List.hd dims_len_llvalues) (List.tl dims_len_llvalues) in
-    print_llvalue array_size;
+    print_llvalue "array_size" array_size;
     let elem_type = array_llty |> L.struct_element_types |> fun arr -> Array.get arr 0 |> L.element_type in
-    print_lltype array_llty;
-    print_lltype elem_type;
+    print_lltype "array_llty" array_llty;
+    print_lltype "elem_ty" elem_type;
     let array_addr = L.build_array_alloca elem_type array_size "tmp_array_alloca" builder in
-    print_llvalue array_addr;
+    print_llvalue "array_addr" array_addr;
     array_addr
   in
   let array_struct_addr = match array_struct_addr_opt with
     | Some addr -> addr
     | None -> L.build_alloca array_llty name builder
   in
-  print_llvalue array_struct_addr;
+  print_llvalue "array_struct_addr" array_struct_addr;
   List.iteri (fun i llv -> store_to_struct array_struct_addr i llv) (array_addr :: dims_len_llvalues)
 
 let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: E.info_tbl_t): L.llmodule =
   let init_depth = 0 in
   let entry_func_name_sym = ("entry_func", 0) in
-  build_func_frame_vars entry_func_name_sym void_type [] info_tbl;
-  (*let entry_func_name_sym = ("entry_func", 0) in
-  let entry_func_type = L.function_type void_type  [||] in
-  let entry_func = L.declare_function (S.name entry_func_name_sym) entry_func_type the_module in
-  L.set_gc (Some "ocaml") entry_func;
-  let entry_point = L.append_block ctx "entry" entry_func in
-  L.position_at_end entry_point builder;
-  let entry_func_esc_list = match E.tbl_find_opt info_tbl entry_func_name_sym with
-    | None -> internal_error None "function %s not in escape info_table" (S.name entry_func_name_sym)
-    | Some E.VarInfo _ -> internal_error None "function %s found as VarInfo in escape info_table" (S.name entry_func_name_sym)
-    | Some (E.FuncInfo { esc_list }) -> esc_list
-  in
-  ignore(build_frame_alloc entry_func_name_sym entry_func_esc_list);*)
+  let entry_func_ty = T.FUNC ([], T.INT) in
+  let entry_body_block = build_func_frame_vars entry_func_name_sym entry_func_ty info_tbl in
+  let entry_ret_llvalue = const_int 0 in
 
   List.iter (generate_ir_def (init_depth + 1) info_tbl) tast;
-  L.build_ret_void builder;
+  build_func_return entry_body_block entry_ret_llvalue;
 
   match LAN.verify_module the_module with
   | None -> the_module
-  | Some reason -> internal_error None "Verification error: %s" reason
+  | Some reason -> pprint the_module; internal_error None "Verification error: %s" reason
 
 and generate_ir_def depth info_tbl = function
   | TA.LetDefNonRec { decs } ->
     List.iter (generate_ir_non_rec_dec depth info_tbl) decs
   | TA.LetDefRec { decs } ->
-    failwith "TODO"
+    let declare_only_func = function 
+      | TA.FunctionDec { ty; name_sym } -> ignore(declare_function name_sym ty) (* functions need to be parsed and declared *)
+      | _ -> () (* others being in info_tbl are already allocated in entry block of current function *)
+    in
+    List.iter declare_only_func decs;
+    List.iter (generate_ir_non_rec_dec depth info_tbl) decs
   | TA.TypeDef { tdecs } ->
     failwith "TODO"
 
@@ -215,32 +240,42 @@ and generate_ir_non_rec_dec depth info_tbl = function
     begin match value with
     | TA.E_String { value } ->
       (* String is represented as array of chars, so has lltype array struct *)
-      let struct_addr = find_llvalue_addr_of_var name_sym info_tbl depth in
+      let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
       let array_llty = lltype_of_ty ty in
       let str_size_with_zeros = String.length value + 1 in
       build_array_llvalue (S.name name_sym) array_llty (Some struct_addr) (Some llvalue) [const_int str_size_with_zeros]
     | _ ->
-      let addr = find_llvalue_addr_of_var name_sym info_tbl depth in
+      let addr = find_llvalue_addr_of_var name_sym depth info_tbl in
       ignore(L.build_store llvalue addr builder)
     end
-  | TA.FunctionDec { ty; name_sym; params; body; loc } ->
-    failwith "TODO"
+  | TA.FunctionDec { ty; name_sym; params; body } ->
+    let current_block = L.insertion_block builder in
+    let body_block = build_func_frame_vars name_sym ty info_tbl in
+    List.iteri (generate_ir_param name_sym info_tbl depth) params;
+    let ret_llvalue = generate_ir_expr (depth + 1) info_tbl body in
+    build_func_return body_block ret_llvalue;
+    L.position_at_end current_block builder
   | TA.MutVarDec { ty; name_sym } ->
     let llvalue = L.const_null (lltype_of_ty ty) in
-    let addr = find_llvalue_addr_of_var name_sym info_tbl depth in
+    let addr = find_llvalue_addr_of_var name_sym depth info_tbl in
     ignore(L.build_store llvalue addr builder)
-  | TA.ArrayDec { ty; name_sym; dims_len_exprs; loc } ->
-    let struct_addr = find_llvalue_addr_of_var name_sym info_tbl depth in
+  | TA.ArrayDec { ty; name_sym; dims_len_exprs } ->
+    let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
     let array_llty = lltype_of_ty ty in
     let dims_len_llvalues = List.map (generate_ir_expr depth info_tbl) dims_len_exprs in
     build_array_llvalue (S.name name_sym) array_llty (Some struct_addr) None dims_len_llvalues
     
-  
+and generate_ir_param func_name_sym info_tbl depth param_index (Param { name_sym }) =
+  let func = find_function_in_module func_name_sym in
+  let var_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
+  let param_llvalue = L.param func param_index in
+  ignore(L.build_store param_llvalue var_addr builder)
+
 and generate_ir_expr depth info_tbl expr: L.llvalue =
   let rec generate_ir_expr_aux = function
   | TA.E_ID  { name_sym } ->
-    let id_addr = find_llvalue_addr_of_var name_sym info_tbl depth in
-    L.build_load id_addr ((S.name name_sym) ^ ":temp_load") builder
+    let id_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
+    L.build_load id_addr "temp_load" builder
   | TA.E_Int  { ty; value } -> 
     L.const_int (lltype_of_ty ty) value
   | TA.E_Float { ty; value } -> 
@@ -262,10 +297,10 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.E_ArrayRef { name_sym; exprs } ->
     let exprs_ll = List.map generate_ir_expr_aux exprs in
     (* TODO generate mapped boundary check *)
-    let struct_addr = find_llvalue_addr_of_var name_sym info_tbl depth in
+    let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
     failwith "TODO"
   | TA.E_ArrayDim { dim; name_sym } ->
-    let struct_addr = find_llvalue_addr_of_var name_sym info_tbl depth in
+    let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
     (* TODO array boundary check before gep instruction *)
     (* dim (as int constant >= 1) equals struct offset *)
     let dim_addr = L.build_struct_gep struct_addr dim "tmp_struct_dim_addr" builder in
@@ -273,13 +308,15 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.E_New { ty } -> failwith "TODO"
   | TA.E_Delete { ty; expr; loc } ->
     failwith "TODO"
-  | TA.E_FuncCall { ty; name_sym; param_exprs; loc } ->
-    failwith "TODO"
+  | TA.E_FuncCall { ty; name_sym; param_exprs } ->
+    let callee = find_function_in_module name_sym in
+    let param_llvalues = List.map generate_ir_expr_aux param_exprs in
+    L.build_call callee (Array.of_list param_llvalues) ("temp_call") builder
   | TA.E_ConstrCall { ty; name_sym; param_exprs; loc} ->
     failwith "TODO"
   | TA.E_LetIn { letdef; in_expr} ->
     generate_ir_def depth info_tbl letdef;
-    generate_ir_expr_aux in_expr
+    generate_ir_expr depth info_tbl in_expr
   | TA.E_BeginEnd { expr } ->
     generate_ir_expr_aux expr
   | TA.E_MatchedIF { ty; if_expr; then_expr; else_expr; loc } ->
