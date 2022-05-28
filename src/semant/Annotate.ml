@@ -1,5 +1,4 @@
 module A = Ast
-module H = Hashtbl
 module TA = TypedAst
 module T = Types
 module S = Symbol
@@ -10,8 +9,10 @@ let v_error_fmt = format_of_string "Unbound value %s"
 (** [t_error_fmt] format string on unbound type constructor *)
 and t_error_fmt = format_of_string "Unbound type constructor %s"
 
+(** [invalid_dim_num_error_fmt] format string on invalid dim number *)
 and invalid_dim_num_error_fmt = format_of_string "Number in dim expression should be in range [%d, %d], based on dimensions of %s"
 
+(** [multiple_definitions_error_fmt] format string on multiple definitions in the same group *)
 and multiple_definitions_error_fmt = format_of_string "Multiple definitions of %s %s. Definition names in the same group should be unique."
 
 (** [fatal_error loc] invokes Error.pos_fatal_error [loc] *)
@@ -71,12 +72,17 @@ let dim_opt_to_num loc venv name_sym = function
     then num
     else fatal_error loc invalid_dim_num_error_fmt min_dim max_dim name
 
+(* module for set of ints *)
 module IntSet = Set.Make( 
   struct
     let compare = compare
     type t = int
   end)
 
+(** [multiple_decl_check def] returns unit after checking in the same group of delarations for duplicate
+    names to be bound. Possible declaration groups are: normal/recursive variable declarations (separated with 'and'),
+    type declaration and parameter declaration in function header (no duplicate names are allowed).
+    Raises: Error.Terminate using [fatal_error] in case of duplicates *)
 let multiple_decl_check def =
   let add_to_set set name_sym loc dec_type =
     match IntSet.find_opt (S.num name_sym) set with
