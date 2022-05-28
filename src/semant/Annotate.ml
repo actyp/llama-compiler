@@ -1,4 +1,5 @@
 module A = Ast
+module H = Hashtbl
 module TA = TypedAst
 module T = Types
 module S = Symbol
@@ -8,6 +9,10 @@ let v_error_fmt = format_of_string "Unbound value %s"
 
 (** [t_error_fmt] format string on unbound type constructor *)
 and t_error_fmt = format_of_string "Unbound type constructor %s"
+
+and invalid_dim_num_error_fmt = format_of_string "Number in dim expression should be in range [%d, %d], based on dimensions of %s"
+
+and multiple_definitions_error_fmt = format_of_string "Multiple definitions of %s %s. Definition names in the same group should be unique."
 
 (** [fatal_error loc] invokes Error.pos_fatal_error [loc] *)
 let fatal_error loc = Error.pos_fatal_error loc
@@ -51,20 +56,53 @@ let make_fun_ty aparams ret_ty =
     array dim expression. Uses [venv] and sym_to_ty to find min and max values from [name_sym]
     that should have type T.ARRAY. Boundary values are min_dim and max_dim. 
     Raises: Error.Terminate using [fatal_error] if the number provided is not in range [min_dim, max_dim] *)
-    let dim_opt_to_num loc venv name_sym = function
-    | None -> 1
-    | Some num ->
-      let name = (S.name name_sym) in
-      let min_dim = 1 in
-      let max_dim = match sym_to_ty loc v_error_fmt venv name_sym with
-      | T.ARRAY (dims, _) -> dims
-      | T.VAR _ | T.POLY _ -> num (* unknown array size until now, so max_dim == num provided *)
-      | _ as other_ty -> 
-        internal_error loc "%s expected type of Types.ARRAY, instead found %s" name (T.ty_to_string other_ty)
+let dim_opt_to_num loc venv name_sym = function
+  | None -> 1
+  | Some num ->
+    let name = (S.name name_sym) in
+    let min_dim = 1 in
+    let max_dim = match sym_to_ty loc v_error_fmt venv name_sym with
+    | T.ARRAY (dims, _) -> dims
+    | T.VAR _ | T.POLY _ -> num (* unknown array size until now, so max_dim == num provided *)
+    | _ as other_ty -> 
+      internal_error loc "%s expected type of Types.ARRAY, instead found %s" name (T.ty_to_string other_ty)
+    in
+    if num >= min_dim && num <= max_dim
+    then num
+    else fatal_error loc invalid_dim_num_error_fmt min_dim max_dim name
+
+module IntSet = Set.Make( 
+  struct
+    let compare = compare
+    type t = int
+  end)
+
+let multiple_decl_check def =
+  let add_to_set set name_sym loc dec_type =
+    match IntSet.find_opt (S.num name_sym) set with
+      | None -> IntSet.add (S.num name_sym) set
+      | Some _ -> ignore(fatal_error loc multiple_definitions_error_fmt dec_type (S.name name_sym)); set
+  in
+  let var_dec_check set = function
+    | A.ConstVarDec { name_sym; loc } | A.MutVarDec { name_sym; loc } | A.ArrayDec { name_sym; loc } ->
+      add_to_set set name_sym loc "variable"
+    | A.FunctionDec { name_sym; params; loc } -> 
+      let param_decl_check set (A.Param { name_sym; ty_opt; loc }) = 
+        add_to_set set name_sym loc "parameter"
       in
-      if num >= min_dim && num <= max_dim
-      then num
-      else fatal_error loc "Number in dim expression should be in [%d, %d], based on dimensions of %s" min_dim max_dim name
+      ignore(List.fold_left param_decl_check IntSet.empty params);
+      set
+  
+  and type_dec_check set (A.TypeDec { name_sym; loc }) = 
+    add_to_set set name_sym loc "type"
+  
+  in
+  ignore(
+    match def with 
+    | A.LetDef { decs } -> List.fold_left var_dec_check IntSet.empty decs
+    | A.TypeDef { tdecs } -> List.fold_left type_dec_check IntSet.empty tdecs
+  )
+
 
 (** [annotate_list_seq f_an env ls] applies annotation function [f_an] sequentially
     to each member of ast nodes in list [ls] starting with initial env [env] and
@@ -100,12 +138,14 @@ let rec annotate (venv: TA.venv) (tenv: TA.tenv) (ast: A.ast): TA.env_tast =
 
 (** [annotate_def venv tenv def] returns the typed letdef generated from [tenv] and [def] *)
 and annotate_let_def venv tenv = function
-  | A.LetDef { recur_opt = None; decs; loc } ->
+  | A.LetDef { recur_opt = None; decs; loc } as def ->
+    multiple_decl_check def;
     let annotate_non_rec_dec, augment_venv_after_ann = annotate_non_rec_dec_funs in
     let adecs = List.map (annotate_non_rec_dec venv tenv) decs in
     let venv' = List.fold_left augment_venv_after_ann venv adecs in
     venv', TA.LetDefNonRec { decs = adecs; loc }
-  | A.LetDef { recur_opt = Some recur; decs; loc } ->
+  | A.LetDef { recur_opt = Some recur; decs; loc } as def ->
+    multiple_decl_check def;
     let augment_venv, annotate_rec_dec = annotate_rec_dec_funs in
     let venv' = List.fold_left (augment_venv tenv) venv decs in
     let adecs = List.map (annotate_rec_dec venv' tenv) decs in
@@ -115,7 +155,8 @@ and annotate_let_def venv tenv = function
 
 (** [annotate_type_def tenv def] returns the typed typedef generated from [tenv] and [def] *)
 and annotate_type_def tenv = function
-  | A.TypeDef { tdecs; loc } ->
+  | A.TypeDef { tdecs; loc } as def ->
+    multiple_decl_check def;
     let augment_tenv, annotate_tdec = annotate_tdec_funs in
     let tenv_heads = List.fold_left augment_tenv tenv tdecs in
     let tenv', atdecs = annotate_list_seq annotate_tdec tenv_heads tdecs in
@@ -135,22 +176,23 @@ and annotate_tdec_funs =
 
   and annotate_tdec tenv (A.TypeDec { name_sym; constrs; loc }) =
     match S.look tenv name_sym with
-    | None -> internal_error loc "annotate_tdec did not found %s in tenv" (S.name name_sym)
-    | Some userty ->
-      let tenv', aconstrs = annotate_list_seq (annotate_constr userty) tenv constrs in
+    | None -> 
+      internal_error loc "annotate_tdec did not find %s in tenv" (S.name name_sym)
+    | Some userdef_ty ->
+      let tenv', aconstrs = annotate_list_seq (annotate_constr userdef_ty) tenv constrs in
       tenv', TA.TypeDec { name_sym; constrs = aconstrs; loc }
 
-  and annotate_constr userty tenv = function
+  and annotate_constr userdef_ty tenv = function
     | A.Constr { name_sym; tys_opt = None; loc } ->
-      let ty = T.CONSTR ([], userty, ref ()) in
+      let ty = T.CONSTR ([], userdef_ty, ref ()) in
       let tenv' = S.enter tenv name_sym ty in
       tenv', TA.Constr { ty = ty; name_sym; loc }
     | A.Constr { name_sym; tys_opt = Some t_list; loc } ->
       let tys = List.map (from_ast_type loc tenv) t_list in
-      let ty = T.CONSTR (tys, userty, ref ()) in
+      let ty = T.CONSTR (tys, userdef_ty, ref ()) in
       let tenv' = S.enter tenv name_sym ty in
       tenv', TA.Constr { ty = ty; name_sym; loc }
-
+  
   in
   augment_tenv, annotate_tdec
 

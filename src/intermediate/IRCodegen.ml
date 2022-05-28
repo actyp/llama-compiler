@@ -2,6 +2,8 @@ module E = Escape
 module H = Hashtbl
 module L = Llvm
 module LAN = Llvm_analysis
+module LBE = Llvm_all_backends
+module LTG = Llvm_target
 module S = Symbol
 module T = Types
 module TA = TypedAst
@@ -37,18 +39,33 @@ let pprint (llmodule: L.llmodule): unit = L.dump_module llmodule
 let print_lltype msg lltype = Printf.printf "%s lltype: %s\n" msg (L.string_of_lltype lltype); flush stdout
 and print_llvalue msg llvalue = Printf.printf "%s llvalue: %s\n" msg (L.string_of_llvalue llvalue); flush stdout
 
+let _ = LBE.initialize()
+let ll_target_triple = LTG.Target.default_triple ()
+let ll_target = LTG.Target.by_triple ll_target_triple
+let ll_machine = LTG.TargetMachine.create ll_target_triple ll_target
+let ll_data_layout = Llvm_target.TargetMachine.data_layout ll_machine
+
 let ctx = L.global_context ()
 let the_module = L.create_module ctx "llama"
 let builder = L.builder ctx
+
 let void_type = L.void_type ctx
 and int_type = L.integer_type ctx 64
 and char_type = L.integer_type ctx 8
 and bool_type = L.integer_type ctx 1
 and float_type = L.float_type ctx
-and string_type = L.pointer_type (L.i8_type ctx)
 and struct_type = L.struct_type ctx
 
 let const_int i = L.const_int int_type i
+
+let get_global_string_pointer string_value =
+  let string_ptr = L.build_global_stringptr string_value "str" builder in
+  tbl_add global_str_tbl string_value string_ptr;
+  string_ptr
+
+let ll_name_of_userdef_ty = function
+  | T.USERDEF (name_sym, occ_num) -> (S.name name_sym) ^ ":" ^ (string_of_int occ_num)
+  | _ -> internal_error_of_msg_format None "USERDEF" "other type" "userdef_type_name_of" "type"
 
 let rec lltype_of_ty: T.ty -> L.lltype = function
   | T.UNIT -> bool_type
@@ -58,25 +75,32 @@ let rec lltype_of_ty: T.ty -> L.lltype = function
   | T.FLOAT -> float_type
   | T.REF (ty, _) | T.DYN_REF (ty, _) -> L.pointer_type (lltype_of_ty ty)
   | T.ARRAY (dims, ty) ->
+    (* array type is a struct { pointer to array, dim1 size, ..., dimN size } *)
     let rec gen_int_type_list curr_dim curr_tys = 
       if curr_dim = dims then curr_tys else gen_int_type_list (curr_dim + 1) (int_type :: curr_tys)
     in
     let array_ptr = L.pointer_type(lltype_of_ty ty) in
     let struct_elem_list = array_ptr :: (gen_int_type_list 0 []) in
-    (* struct { pointer to array, dim1 size, ..., dimN size }*)
     struct_type (Array.of_list struct_elem_list)
   | T.FUNC (param_tys, ret_ty) ->
     let param_lltypes = Array.of_list (List.map lltype_of_ty param_tys) in
     let ret_lltype = lltype_of_ty ret_ty in
     L.function_type ret_lltype param_lltypes
-  | T.USERDEF _ -> 
-    struct_type [| string_type; int_type |]
+  | T.USERDEF (name_sym, occ_num) as ty -> 
+    (* userdef type is a named struct, 'name:occ_num' = { int_tag; largest constructor type size } 
+       (implementing tagged union), created elsewhere and only queried from here *)
+    let userdef_type_name = ll_name_of_userdef_ty ty in
+    begin match L.type_by_name the_module userdef_type_name with
+      | Some lltype -> L.pointer_type lltype
+      | None -> internal_error None "unknown userdef type encountered in lltype_of_ty"
+    end
   | T.CONSTR (param_tys, userdef_ty, _) ->
-    let param_lltypes = Array.of_list (List.map lltype_of_ty param_tys) in
-    let userdef_lltype = lltype_of_ty userdef_ty in
-    L.function_type userdef_lltype param_lltypes
+    (* type constructor is a struct { int_tag; param_ty1; ...,  param_tyN} 
+       following on the implementation of tagged union *)
+    let param_lltypes = List.map lltype_of_ty param_tys in
+    struct_type (Array.of_list (int_type :: param_lltypes))
   | T.VAR _ -> bool_type
-  | T.POLY _ -> internal_error None "poly type found unsubstituted"
+  | T.POLY _ -> internal_error None "poly type encountered in lltype_of_ty"
 
 let rec find_declaration_frame current_frame curr_depth dec_depth =
   if curr_depth - dec_depth <= 0
@@ -129,15 +153,13 @@ let declare_function name_sym func_ty =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "declare_function" (S.name name_sym)
   in
-  let ret_lltype, param_lltype_list = match func_ty with
-    | T.FUNC (param_tys, ret_ty) -> lltype_of_ty ret_ty, List.map lltype_of_ty param_tys
+  let func_type = match func_ty with
+    | T.FUNC _ -> lltype_of_ty func_ty
     | _ -> func_internal_error "Types.FUNC" "other type" name_sym
   in
-  let func_type = L.function_type ret_lltype (Array.of_list param_lltype_list) in
   let func = L.declare_function (S.name name_sym) func_type the_module in
   L.set_gc (Some "ocaml") func;
   func
-
 
 let build_func_frame_vars name_sym func_ty info_tbl =
   let func_internal_error expected found name_sym =
@@ -207,6 +229,30 @@ let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dim
   print_llvalue "array_struct_addr" array_struct_addr;
   List.iteri (fun i llv -> store_to_struct array_struct_addr i llv) (array_addr :: dims_len_llvalues)
 
+let userdef_ty_of_constr (TA.Constr { ty }) =
+  let userdef_ty_of_constr_ty = function
+    | T.CONSTR (_, ty, _) -> ty
+    | _ -> internal_error_of_msg_format None "CONSTR" "other type" "userdef_ty_of_constr_ty" "type"
+  in
+  userdef_ty_of_constr_ty ty
+
+let declare_opaque_userdef_type (TA.TypeDec { name_sym; constrs }) =
+  let struct_name = constrs |> List.hd |> userdef_ty_of_constr |> ll_name_of_userdef_ty in
+  (* type is opaque; just a name *)
+  L.named_struct_type ctx struct_name
+
+let create_userdef_type_struct (TA.TypeDec { name_sym; constrs }) =
+  let constr_ll_types = List.map (fun (TA.Constr { ty }) -> lltype_of_ty ty) constrs in
+  List.iteri (fun i ty -> print_lltype (string_of_int i) ty) constr_ll_types;
+  let abi_size_of llty = LTG.DataLayout.abi_size llty ll_data_layout in
+  let largest_lltype_of t1 t2 = if (abi_size_of t1) > (abi_size_of t2) then t1 else t2 in
+  let largest_lltype = List.fold_left largest_lltype_of (List.hd constr_ll_types) constr_ll_types in
+  print_lltype "max_type" largest_lltype;
+  let struct_lltype = constrs |> List.hd |> userdef_ty_of_constr |> lltype_of_ty |> L.element_type in (* opaque type *)
+  L.struct_set_body struct_lltype [| int_type; largest_lltype |] false; (* opaque type obtains body and becomes struct type *)
+  print_lltype (S.name name_sym) struct_lltype
+
+(* let create_userdef_type  *)
 let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: E.info_tbl_t): L.llmodule =
   let init_depth = 0 in
   let entry_func_name_sym = ("entry_func", 0) in
@@ -232,7 +278,8 @@ and generate_ir_def depth info_tbl = function
     List.iter declare_only_func decs;
     List.iter (generate_ir_non_rec_dec depth info_tbl) decs
   | TA.TypeDef { tdecs } ->
-    failwith "TODO"
+    List.iter (fun tdec -> ignore(declare_opaque_userdef_type tdec)) tdecs; (* type names need to be parsed and declared *)
+    List.iter create_userdef_type_struct tdecs (* create struct types for opaque declared types *)
 
 and generate_ir_non_rec_dec depth info_tbl = function
   | TA.ConstVarDec { ty; name_sym; value } ->
@@ -282,13 +329,10 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     L.const_float (lltype_of_ty ty) value
   | TA.E_Char { ty; value } -> 
     L.const_int (lltype_of_ty ty) (int_of_char value)
-  | TA.E_String  { ty; value } ->
+  | TA.E_String  { value } ->
     begin match tbl_find_opt global_str_tbl value with
     | Some string_ptr -> string_ptr
-    | None -> 
-      let string_ptr = L.build_global_stringptr value "str" builder in
-      tbl_add global_str_tbl value string_ptr;
-      string_ptr
+    | None -> get_global_string_pointer value
     end
   | TA.E_BOOL { ty; value } -> 
     L.const_int (lltype_of_ty ty) (if value then 1 else 0)
