@@ -81,7 +81,7 @@ module IntSet = Set.Make(
 
 (** [multiple_decl_check def] returns unit after checking in the same group of delarations for duplicate
     names to be bound. Possible declaration groups are: normal/recursive variable declarations (separated with 'and'),
-    type declaration and parameter declaration in function header (no duplicate names are allowed).
+    type declaration and type constructor and parameter declaration in function header (no duplicate names are allowed).
     Raises: Error.Terminate using [fatal_error] in case of duplicates *)
 let multiple_decl_check def =
   let add_to_set set name_sym loc dec_type =
@@ -93,14 +93,18 @@ let multiple_decl_check def =
     | A.ConstVarDec { name_sym; loc } | A.MutVarDec { name_sym; loc } | A.ArrayDec { name_sym; loc } ->
       add_to_set set name_sym loc "variable"
     | A.FunctionDec { name_sym; params; loc } -> 
-      let param_decl_check set (A.Param { name_sym; ty_opt; loc }) = 
+      let param_decl_check set (A.Param { name_sym }) = 
         add_to_set set name_sym loc "parameter"
       in
       ignore(List.fold_left param_decl_check IntSet.empty params);
       set
   
-  and type_dec_check set (A.TypeDec { name_sym; loc }) = 
-    add_to_set set name_sym loc "type"
+  and type_dec_check set (A.TypeDec { name_sym; constrs; loc }) =
+    let constr_decl_check set (A.Constr { name_sym; loc }) =
+      add_to_set set name_sym loc "type constructor"
+    in
+    ignore(List.fold_left constr_decl_check IntSet.empty constrs);
+    set
   
   in
   ignore(
