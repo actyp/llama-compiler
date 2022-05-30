@@ -20,7 +20,7 @@ and dec =
 and tdec =
     TypeDec of { name_sym : symbol; constrs : constr list; loc : loc }
 
-and constr = Constr of { ty : T.ty; name_sym : symbol; loc : loc }
+and constr = Constr of { ty : T.ty; name_sym : symbol; index:int; loc : loc }
 
 and param = Param of { ty : T.ty; name_sym : symbol; loc : loc }
 

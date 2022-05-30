@@ -193,15 +193,15 @@ and annotate_tdec_funs =
       tenv', TA.TypeDec { name_sym; constrs = aconstrs; loc }
 
   and annotate_constr userdef_ty tenv = function
-    | A.Constr { name_sym; tys_opt = None; loc } ->
+    | A.Constr { name_sym; tys_opt = None; index; loc } ->
       let ty = T.CONSTR ([], userdef_ty, ref ()) in
       let tenv' = S.enter tenv name_sym ty in
-      tenv', TA.Constr { ty = ty; name_sym; loc }
-    | A.Constr { name_sym; tys_opt = Some t_list; loc } ->
+      tenv', TA.Constr { ty = ty; name_sym; index; loc }
+    | A.Constr { name_sym; tys_opt = Some t_list; index; loc } ->
       let tys = List.map (from_ast_type loc tenv) t_list in
       let ty = T.CONSTR (tys, userdef_ty, ref ()) in
       let tenv' = S.enter tenv name_sym ty in
-      tenv', TA.Constr { ty = ty; name_sym; loc }
+      tenv', TA.Constr { ty = ty; name_sym; index; loc }
   
   in
   augment_tenv, annotate_tdec

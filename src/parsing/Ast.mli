@@ -18,7 +18,7 @@ and tdec =
     TypeDec of { name_sym : symbol; constrs : constr list; loc : loc }
 
 and constr =
-    Constr of { name_sym : symbol; tys_opt : _type list option; loc : loc }
+    Constr of { name_sym : symbol; index: int; tys_opt : _type list option; loc : loc }
 
 and param = Param of { name_sym : symbol; ty_opt : _type option; loc : loc }
 

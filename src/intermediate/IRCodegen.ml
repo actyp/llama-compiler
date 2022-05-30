@@ -21,8 +21,8 @@ let internal_error_of_msg_format loc_opt expected found func_name =
   let msg_fmt = expected ^^ " %s found as " ^^ found ^^ " in " ^^ func_name in
   internal_error loc_opt msg_fmt
 
-type global_str_tbl_t = (string, L.llvalue) H.t
-let global_str_tbl: global_str_tbl_t = H.create 512
+let global_str_tbl: (string, L.llvalue) H.t = H.create 512
+let constr_info_tbl: (string, (int * L.lltype)) H.t = H.create 512
 
 let tbl_add tbl key entry = H.replace tbl key entry
 and tbl_find_opt tbl key = H.find_opt tbl key
@@ -67,6 +67,17 @@ let ll_name_of_userdef_ty = function
   | T.USERDEF (name_sym, occ_num) -> (S.name name_sym) ^ ":" ^ (string_of_int occ_num)
   | _ -> internal_error_of_msg_format None "USERDEF" "other type" "userdef_type_name_of" "type"
 
+let llname_of_constr_info name_sym userdef_ty =
+  let userdef_ty_name =  ll_name_of_userdef_ty userdef_ty in
+  userdef_ty_name ^ ":" ^ (S.name name_sym)
+
+let userdef_ty_of_constr_ty = function
+  | T.CONSTR (_, ty, _) -> ty
+  | _ -> internal_error_of_msg_format None "CONSTR" "other type" "userdef_ty_of_constr_ty" "type"
+
+let userdef_ty_of_constr (TA.Constr { ty }) =
+  userdef_ty_of_constr_ty ty
+
 let rec lltype_of_ty: T.ty -> L.lltype = function
   | T.UNIT -> bool_type
   | T.INT -> int_type
@@ -87,18 +98,18 @@ let rec lltype_of_ty: T.ty -> L.lltype = function
     let ret_lltype = lltype_of_ty ret_ty in
     L.function_type ret_lltype param_lltypes
   | T.USERDEF (name_sym, occ_num) as ty -> 
-    (* userdef type is a named struct, 'name:occ_num' = { int_tag; largest constructor type size } 
+    (* userdef type is pointer to a named struct, 'name:occ_num' = { int_tag; largest constructor type size } 
        (implementing tagged union), created elsewhere and only queried from here *)
     let userdef_type_name = ll_name_of_userdef_ty ty in
     begin match L.type_by_name the_module userdef_type_name with
       | Some lltype -> L.pointer_type lltype
-      | None -> internal_error None "unknown userdef type encountered in lltype_of_ty"
+      | None -> L.pointer_type (L.named_struct_type ctx userdef_type_name) (* just declare the opaque type *)
     end
   | T.CONSTR (param_tys, userdef_ty, _) ->
-    (* type constructor is a struct { int_tag; param_ty1; ...,  param_tyN} 
+    (* type constructor is pointer to a struct { int_tag; param_ty1; ...,  param_tyN} 
        following on the implementation of tagged union *)
     let param_lltypes = List.map lltype_of_ty param_tys in
-    struct_type (Array.of_list (int_type :: param_lltypes))
+    struct_type (Array.of_list (int_type :: param_lltypes)) |> L.pointer_type
   | T.VAR _ -> bool_type
   | T.POLY _ -> internal_error None "poly type encountered in lltype_of_ty"
 
@@ -229,30 +240,44 @@ let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dim
   print_llvalue "array_struct_addr" array_struct_addr;
   List.iteri (fun i llv -> store_to_struct array_struct_addr i llv) (array_addr :: dims_len_llvalues)
 
-let userdef_ty_of_constr (TA.Constr { ty }) =
-  let userdef_ty_of_constr_ty = function
-    | T.CONSTR (_, ty, _) -> ty
-    | _ -> internal_error_of_msg_format None "CONSTR" "other type" "userdef_ty_of_constr_ty" "type"
+let create_named_type_structs (TA.TypeDec { name_sym; constrs }) =
+  let userdef_ty =  constrs |> List.hd |> userdef_ty_of_constr in
+  let constr_lltypes = List.map (fun (TA.Constr { ty }) -> lltype_of_ty ty |> L.element_type) constrs in
+  List.iteri (fun i ty -> print_lltype (string_of_int i) ty) constr_lltypes;
+
+  let create_userdef_named_struct_type () =
+    let abi_size_of llty = LTG.DataLayout.abi_size llty ll_data_layout in
+    let largest_lltype_of t1 t2 = if (abi_size_of t1) > (abi_size_of t2) then t1 else t2 in
+    let largest_lltype = List.fold_left largest_lltype_of (List.hd constr_lltypes) constr_lltypes in
+    print_lltype "max_type" largest_lltype;
+    let struct_lltype =  userdef_ty |> lltype_of_ty |> L.element_type in (* opaque type *)
+    L.struct_set_body struct_lltype (L.struct_element_types largest_lltype) false; (* opaque type obtains body and becomes struct type *)
+    print_lltype (S.name name_sym) struct_lltype
+  
+  and create_constr_named_struct_types () =
+    let create_constr_named_struct_type (TA.Constr { name_sym; index }) lltype =
+      let struct_name = llname_of_constr_info name_sym userdef_ty in
+      let struct_lltype = L.named_struct_type ctx struct_name in
+      L.struct_set_body struct_lltype (L.struct_element_types lltype) false;
+      print_lltype struct_name struct_lltype;
+      tbl_add constr_info_tbl struct_name (index, L.pointer_type struct_lltype)
+    in
+    List.iter2 create_constr_named_struct_type constrs constr_lltypes
+  
   in
-  userdef_ty_of_constr_ty ty
+  create_userdef_named_struct_type ();
+  create_constr_named_struct_types ()
 
-let declare_opaque_userdef_type (TA.TypeDec { name_sym; constrs }) =
-  let struct_name = constrs |> List.hd |> userdef_ty_of_constr |> ll_name_of_userdef_ty in
-  (* type is opaque; just a name *)
-  L.named_struct_type ctx struct_name
+let build_alloca_end_of_entry_block lltype name =
+  let instr_of_option = function
+    | None -> internal_error None "no instruction option specified in build_alloca_end_of_entry_block"
+    | Some i -> i
+  in
+  let entry_block_end_builder = builder |> L.insertion_block |> L.block_parent |> L.entry_block 
+    |> L.block_terminator |> instr_of_option |> L.builder_before ctx
+  in
+  L.build_alloca lltype name entry_block_end_builder
 
-let create_userdef_type_struct (TA.TypeDec { name_sym; constrs }) =
-  let constr_ll_types = List.map (fun (TA.Constr { ty }) -> lltype_of_ty ty) constrs in
-  List.iteri (fun i ty -> print_lltype (string_of_int i) ty) constr_ll_types;
-  let abi_size_of llty = LTG.DataLayout.abi_size llty ll_data_layout in
-  let largest_lltype_of t1 t2 = if (abi_size_of t1) > (abi_size_of t2) then t1 else t2 in
-  let largest_lltype = List.fold_left largest_lltype_of (List.hd constr_ll_types) constr_ll_types in
-  print_lltype "max_type" largest_lltype;
-  let struct_lltype = constrs |> List.hd |> userdef_ty_of_constr |> lltype_of_ty |> L.element_type in (* opaque type *)
-  L.struct_set_body struct_lltype [| int_type; largest_lltype |] false; (* opaque type obtains body and becomes struct type *)
-  print_lltype (S.name name_sym) struct_lltype
-
-(* let create_userdef_type  *)
 let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: E.info_tbl_t): L.llmodule =
   let init_depth = 0 in
   let entry_func_name_sym = ("entry_func", 0) in
@@ -278,8 +303,14 @@ and generate_ir_def depth info_tbl = function
     List.iter declare_only_func decs;
     List.iter (generate_ir_non_rec_dec depth info_tbl) decs
   | TA.TypeDef { tdecs } ->
-    List.iter (fun tdec -> ignore(declare_opaque_userdef_type tdec)) tdecs; (* type names need to be parsed and declared *)
-    List.iter create_userdef_type_struct tdecs (* create struct types for opaque declared types *)
+    let ensure_declared_userdef_type (TA.TypeDec { name_sym; constrs }) = 
+      (* use lltype_of_ty to retrieve already declared type or declare new type.
+        Types may be already declared when a var of custom type is found in the 
+        escape or local vars of entry function *)
+      constrs |> List.hd |> userdef_ty_of_constr |> lltype_of_ty |> ignore
+    in
+    List.iter ensure_declared_userdef_type tdecs; (* decalare non-yet-declared custom types *)
+    List.iter create_named_type_structs tdecs (* create struct types for opaque declared userdef type and constructor types *)
 
 and generate_ir_non_rec_dec depth info_tbl = function
   | TA.ConstVarDec { ty; name_sym; value } ->
@@ -357,7 +388,45 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let param_llvalues = List.map generate_ir_expr_aux param_exprs in
     L.build_call callee (Array.of_list param_llvalues) ("temp_call") builder
   | TA.E_ConstrCall { ty; name_sym; param_exprs; loc} ->
-    failwith "TODO"
+    let userdef_struct_pointer_lltype = lltype_of_ty ty in
+    let userdef_struct_lltype = L.element_type userdef_struct_pointer_lltype in
+    print_lltype ("userdef struct type:") userdef_struct_lltype;
+    let llname = llname_of_constr_info name_sym ty in
+    let idx, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
+      | Some (idx, lltype) -> idx, lltype
+      | None -> internal_error_of_msg_format (Some loc) "Some (index, lltype)" "None" "constr_info_tbl" "pair"
+    in
+    print_lltype ("constr type: (idx = " ^ string_of_int idx ^ ")") constr_struct_pointer_lltype;
+
+    (* allocate userdef struct *)
+    let userdef_struct = build_alloca_end_of_entry_block userdef_struct_lltype ("temp_userdef_type:" ^ (S.name name_sym)) in
+    print_llvalue "userdef_struct" userdef_struct;
+    
+    (* store tag == index *)
+    let tag_addr = L.build_struct_gep userdef_struct 0 "userdef_struct_tag_addr" builder in
+    ignore(L.build_store (const_int idx) tag_addr builder);
+
+    if List.length param_exprs > 0 then begin
+      (* allocate userdef struct pointer and store userdef struct *)
+      let userdef_struct_pointer = build_alloca_end_of_entry_block userdef_struct_pointer_lltype ("temp_userdef_pointer_type:" ^ (S.name name_sym)) in
+      print_llvalue "userdef_struct_pointer" userdef_struct_pointer;
+      ignore(L.build_store userdef_struct userdef_struct_pointer builder);
+
+      (* cast userdef_struct pointer to specific constr struct pointer *)
+      let constr_struct = L.build_pointercast userdef_struct_pointer constr_struct_pointer_lltype "userdef_to_constr_cast" builder in
+      print_llvalue "casted_constr_struct" constr_struct;
+
+      (* store all other parameters to constr_struct *)
+      let param_llvalues = List.map generate_ir_expr_aux param_exprs in
+      let store_to_constr_struct idx value =
+        let addr = L.build_struct_gep constr_struct idx "tmp_constr_struct_store_addr" builder in
+        ignore(L.build_store value addr builder)
+      in
+      List.iteri (fun idx llvalue -> store_to_constr_struct (idx + 1) llvalue) param_llvalues
+    end;
+
+    (* return the userdef struct *)
+    userdef_struct
   | TA.E_LetIn { letdef; in_expr} ->
     generate_ir_def depth info_tbl letdef;
     generate_ir_expr depth info_tbl in_expr

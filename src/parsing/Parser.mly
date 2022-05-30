@@ -175,11 +175,13 @@ typedef:
 ;
 
 tdef:
-  ID; STR_EQUAL; constr; list(BAR constr { $2 }) { Ast.TypeDec {name_sym = Symbol.symbol($1); constrs = $3 :: $4; loc = $loc} }
+  ID; STR_EQUAL; constr; list(BAR constr { $2 }) { Ast.TypeDec {name_sym = Symbol.symbol($1); 
+                                                   constrs = List.mapi (fun i (Ast.Constr (_ as r)) -> Ast.Constr {r with index = i}) ($3 :: $4); 
+                                                   loc = $loc} }
 ;
 
 constr:
-  CID; option(OF; _type+ { $2 }) { Ast.Constr {name_sym = Symbol.symbol($1); tys_opt = $2; loc = $loc} }
+  CID; option(OF; _type+ { $2 }) { Ast.Constr {name_sym = Symbol.symbol($1); index = 0; tys_opt = $2; loc = $loc} }
 ;
 
 _type:
