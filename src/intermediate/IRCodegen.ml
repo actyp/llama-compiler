@@ -380,9 +380,13 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     (* dim (as int constant >= 1) equals struct offset *)
     let dim_addr = L.build_struct_gep struct_addr dim "tmp_struct_dim_addr" builder in
     L.build_load dim_addr "tmp_struct_dim_load" builder
-  | TA.E_New { ty } -> failwith "TODO"
+  | TA.E_New { ty } ->
+    let malloc_addr = L.build_malloc (lltype_of_ty ty) "temp_malloc_for_new" builder in
+    L.build_load malloc_addr "tmp_malloc_load_for_new" builder
   | TA.E_Delete { ty; expr; loc } ->
-    failwith "TODO"
+    let llvalue = generate_ir_expr_aux expr in
+    ignore(L.build_free llvalue builder);
+    L.const_null (lltype_of_ty ty)
   | TA.E_FuncCall { ty; name_sym; param_exprs } ->
     let callee = find_function_in_module name_sym in
     let param_llvalues = List.map generate_ir_expr_aux param_exprs in
