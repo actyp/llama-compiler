@@ -58,6 +58,8 @@ and struct_type = L.struct_type ctx
 
 let const_int i = L.const_int int_type i
 
+and const_bool b = L.const_int bool_type (if b then 1 else 0)
+
 let get_global_string_pointer string_value =
   let string_ptr = L.build_global_stringptr string_value "str" builder in
   tbl_add global_str_tbl string_value string_ptr;
@@ -206,11 +208,9 @@ let build_func_frame_vars name_sym func_ty info_tbl =
   ignore(build_frame_alloc name_sym esc_list);
   alloc_locals local_list;
   ignore(L.build_br body_block builder);
-  ignore(L.position_at_end body_block builder);
-  body_block
+  ignore(L.position_at_end body_block builder)
 
-let build_func_return body_block ret_llvalue =
-  L.position_at_end body_block builder;
+let build_func_return ret_llvalue =
   ignore(L.build_ret ret_llvalue builder);
   ignore(function_frames_pop ())
 
@@ -282,11 +282,12 @@ let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: E.info_tbl_t): L.llmo
   let init_depth = 0 in
   let entry_func_name_sym = ("entry_func", 0) in
   let entry_func_ty = T.FUNC ([], T.INT) in
-  let entry_body_block = build_func_frame_vars entry_func_name_sym entry_func_ty info_tbl in
-  let entry_ret_llvalue = const_int 0 in
-
+  build_func_frame_vars entry_func_name_sym entry_func_ty info_tbl;
+  
   List.iter (generate_ir_def (init_depth + 1) info_tbl) tast;
-  build_func_return entry_body_block entry_ret_llvalue;
+  
+  let entry_ret_llvalue = const_int 0 in
+  build_func_return entry_ret_llvalue;
 
   match LAN.verify_module the_module with
   | None -> the_module
@@ -328,10 +329,10 @@ and generate_ir_non_rec_dec depth info_tbl = function
     end
   | TA.FunctionDec { ty; name_sym; params; body } ->
     let current_block = L.insertion_block builder in
-    let body_block = build_func_frame_vars name_sym ty info_tbl in
+    build_func_frame_vars name_sym ty info_tbl;
     List.iteri (generate_ir_param name_sym info_tbl depth) params;
     let ret_llvalue = generate_ir_expr (depth + 1) info_tbl body in
-    build_func_return body_block ret_llvalue;
+    build_func_return ret_llvalue;
     L.position_at_end current_block builder
   | TA.MutVarDec { ty; name_sym } ->
     let llvalue = L.const_null (lltype_of_ty ty) in
@@ -436,12 +437,93 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     generate_ir_expr depth info_tbl in_expr
   | TA.E_BeginEnd { expr } ->
     generate_ir_expr_aux expr
-  | TA.E_MatchedIF { ty; if_expr; then_expr; else_expr; loc } ->
-    failwith "TODO"
+  | TA.E_MatchedIF { if_expr; then_expr; else_expr } ->
+    (* build basic blocks then, else and merge *)
+    let function_block = builder |> L.insertion_block |> L.block_parent in
+    let then_block = L.append_block ctx "if_then" function_block in
+    let else_block = L.append_block ctx "if_else" function_block in
+    let merge_block = L.append_block ctx "if_merge" function_block in
+
+    (* build condition *)
+    let cond_llvalue = generate_ir_expr_aux if_expr in
+    ignore(L.build_cond_br cond_llvalue then_block else_block builder);
+
+    (* build then block *)
+    L.position_at_end then_block builder;
+    let then_llvalue = generate_ir_expr_aux then_expr in
+    ignore(L.build_br merge_block builder);
+
+    (* build else block *)
+    L.position_at_end else_block builder;
+    let else_llvalue = generate_ir_expr_aux else_expr in
+    ignore(L.build_br merge_block builder);
+
+    (* build phi node on merge block and return phi value *)
+    L.position_at_end merge_block builder;
+    L.build_phi [(then_llvalue, then_block); (else_llvalue, else_block)] "tmp_phi" builder
   | TA.E_WhileDoDone  { ty; while_expr; do_expr; loc} ->
-    failwith "TODO"
+    (* build basic blocks check, body and after *)
+    let function_block = builder |> L.insertion_block |> L.block_parent in
+    let check_block = L.append_block ctx "while_check" function_block in
+    let body_block = L.append_block ctx "while_body" function_block in
+    let after_block = L.append_block ctx "while_after" function_block in
+    ignore(L.build_br check_block builder);
+
+    (* build check block *)
+    L.position_at_end check_block builder;
+    let cond_llvalue = generate_ir_expr_aux while_expr in
+    ignore(L.build_cond_br cond_llvalue body_block after_block builder);
+
+    (* build body block *)
+    L.position_at_end body_block builder;
+    ignore(generate_ir_expr_aux do_expr);
+    ignore(L.build_br check_block builder);
+
+    (* build after block and return ty's llvalue *)
+    L.position_at_end after_block builder;
+    L.const_null (lltype_of_ty ty)
   | TA.E_ForDoDone { ty; count_var_sym; start_expr; count_dir; end_expr; do_expr; loc } ->
-    failwith "TODO"
+    (* build basic blocks check, body and after *)
+    let pre_loop_block = builder |> L.insertion_block in
+    let function_block =  pre_loop_block |> L.block_parent in
+    let check_block = L.append_block ctx "for_check" function_block in
+    let body_block = L.append_block ctx "for_body" function_block in
+    let after_block = L.append_block ctx "for_after" function_block in
+    
+    (* count_var and step value *)
+    let count_var = find_llvalue_addr_of_var count_var_sym depth info_tbl in
+    let step_llvalue = const_int 1 in
+
+    (* funs according to count direction *)
+    let step_llfun, cond_llfun = match count_dir with
+      | TA.TO _ -> L.build_add, L.build_icmp L.Icmp.Sle
+      | TA.DOWNTO _ -> L.build_sub, L.build_icmp L.Icmp.Sge
+    in
+      
+    (* build start and end values in current block *)
+    let start_llvalue = generate_ir_expr_aux start_expr in
+    let end_llvalue = generate_ir_expr_aux end_expr in
+    ignore(L.build_br check_block builder);
+
+    (* build check block *)
+    L.position_at_end check_block builder;
+    let loop_llvalue = L.build_empty_phi int_type "loop_var" builder in
+    ignore(L.build_store loop_llvalue count_var builder);
+    L.add_incoming (start_llvalue, pre_loop_block) loop_llvalue;
+    let cond_llvalue = cond_llfun loop_llvalue end_llvalue "cond" builder in
+    
+    ignore(L.build_cond_br cond_llvalue body_block after_block builder);
+
+    (* build body block *)
+    L.position_at_end body_block builder;
+    ignore(generate_ir_expr_aux do_expr);
+    let next_llvalue = step_llfun loop_llvalue step_llvalue "next_loop_var" builder in
+    L.add_incoming (next_llvalue, body_block) loop_llvalue;
+    ignore(L.build_br check_block builder);
+
+    (* build after block and return ty's llvalue *)
+    L.position_at_end after_block builder;
+    L.const_null (lltype_of_ty ty)
   | TA.E_MatchWithEnd { ty; match_expr; with_clauses; loc } ->
     failwith "TODO"
 
