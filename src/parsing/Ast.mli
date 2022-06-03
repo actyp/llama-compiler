@@ -58,6 +58,8 @@ and count_dir =
   | TO of loc
   | DOWNTO of loc
 
+(* According to specification the BasePattClause is not allowed, but implemented for completeness.
+    Semantic analysis finds that base_pattern has not user-defined type and terminates compilation. *)
 and clause =
   | BasePattClause of { base_pattern : base_pattern; expr : expr; loc : loc }
   | ConstrPattClause of { constr_pattern : constr_pattern; expr : expr; loc : loc }

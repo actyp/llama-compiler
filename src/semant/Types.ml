@@ -35,7 +35,7 @@ let rec ty_to_string = function
   | DYN_REF (ty, _) -> paren ty ^ " ref (dynamic)"
   | ARRAY (ds, ty) -> array_dims_to_string ds ^ " of " ^ paren ty
   | FUNC (tys, ret_ty) -> param_tys_to_string tys ^ " -> " ^ paren ret_ty
-  | USERDEF (sym, i) -> if i = 1 then S.name sym else S.name sym ^ " (def #" ^ string_of_int i ^ ")"
+  | USERDEF (sym, i) -> if i <= 1 then S.name sym else S.name sym ^ " (def #" ^ string_of_int i ^ ")"
   | CONSTR (_, user_ty, _) -> ty_to_string user_ty
   | VAR sym -> S.name sym
   | POLY i -> "'p" ^ string_of_int i
