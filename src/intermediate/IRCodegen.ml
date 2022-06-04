@@ -57,13 +57,19 @@ and float_type = L.float_type ctx
 and struct_type = L.struct_type ctx
 
 let const_int i = L.const_int int_type i
-
+and const_char c = L.const_int char_type c
 and const_bool b = L.const_int bool_type (if b then 1 else 0)
+and const_float f = L.const_float float_type f
+
 
 let get_global_string_pointer string_value =
   let string_ptr = L.build_global_stringptr string_value "str" builder in
   tbl_add global_str_tbl string_value string_ptr;
   string_ptr
+
+let runtime_error_string msg =
+  let error_str = "Runtime Error: " ^ msg ^ "\n" in
+  get_global_string_pointer error_str
 
 let ll_name_of_userdef_ty = function
   | T.USERDEF (name_sym, occ_num) -> (S.name name_sym) ^ ":" ^ (string_of_int occ_num)
@@ -384,7 +390,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.E_New { ty } ->
     let malloc_addr = L.build_malloc (lltype_of_ty ty) "temp_malloc_for_new" builder in
     L.build_load malloc_addr "tmp_malloc_load_for_new" builder
-  | TA.E_Delete { ty; expr; loc } ->
+  | TA.E_Delete { ty; expr } ->
     let llvalue = generate_ir_expr_aux expr in
     ignore(L.build_free llvalue builder);
     L.const_null (lltype_of_ty ty)
@@ -397,19 +403,19 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let userdef_struct_lltype = L.element_type userdef_struct_pointer_lltype in
     print_lltype ("userdef struct type:") userdef_struct_lltype;
     let llname = llname_of_constr_info name_sym ty in
-    let idx, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
-      | Some (idx, lltype) -> idx, lltype
-      | None -> internal_error_of_msg_format (Some loc) "Some (index, lltype)" "None" "constr_info_tbl" "pair"
+    let tag, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
+      | Some (tag, lltype) -> tag, lltype
+      | None -> internal_error_of_msg_format (Some loc) "Some (tag, lltype)" "None" "constr_info_tbl" "pair"
     in
-    print_lltype ("constr type: (idx = " ^ string_of_int idx ^ ")") constr_struct_pointer_lltype;
+    print_lltype ("constr type: (tag = " ^ string_of_int tag ^ ")") constr_struct_pointer_lltype;
 
     (* allocate userdef struct *)
     let userdef_struct = build_alloca_end_of_entry_block userdef_struct_lltype ("temp_userdef_type:" ^ (S.name name_sym)) in
     print_llvalue "userdef_struct" userdef_struct;
     
-    (* store tag == index *)
+    (* store tag *)
     let tag_addr = L.build_struct_gep userdef_struct 0 "userdef_struct_tag_addr" builder in
-    ignore(L.build_store (const_int idx) tag_addr builder);
+    ignore(L.build_store (const_int tag) tag_addr builder);
 
     if List.length param_exprs > 0 then begin
       (* allocate userdef struct pointer and store userdef struct *)
@@ -525,23 +531,124 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     L.position_at_end after_block builder;
     L.const_null (lltype_of_ty ty)
   | TA.E_MatchWithEnd { ty; match_expr; with_clauses; loc } ->
-    failwith "TODO"
+    let function_block = builder |> L.insertion_block |> L.block_parent in
+    
+    let rec create_match_check_blocks start finish acc =
+      let block_name = "match_check_" ^ (string_of_int (start + 1)) in
+      if start = finish then List.rev acc
+      else create_match_check_blocks (start + 1) finish ((L.append_block ctx block_name function_block) :: acc)
+    in 
+    let prepend_index_string = List.mapi (fun i (b1, b2) -> (string_of_int (i + 1), b1, b2)) in
 
-  and generate_ir_clause = function
+    (* generate ir for match value *)
+    let match_llvalue = generate_ir_expr_aux match_expr in
+
+    (* create match_check blocks for every clause and match failed block *)
+    let match_check_blocks = create_match_check_blocks 0 (List.length with_clauses) [] in
+    let match_failed_block = L.append_block ctx "match_failed" function_block in
+
+    (* create (current, next) pairs of blocks for every clause *)
+    let match_next_check_blocks = (List.tl match_check_blocks) @ [match_failed_block] in
+    let match_block_pairs  = List.map2 (fun b1 b2 -> b1, b2) match_check_blocks match_next_check_blocks |> prepend_index_string in
+
+    (* create finish block *)
+    let match_finished_block = L.append_block ctx "match_finished" function_block in
+
+    (* generate all clauses *)
+    ignore(L.build_br (List.hd match_check_blocks) builder);
+    let value_block_phi_pairs = List.map2 (generate_ir_clause match_llvalue match_finished_block) match_block_pairs with_clauses in
+
+    (* fill match_failed block *)
+    L.position_at_end match_failed_block builder;
+    let runtime_error_str_ptr = runtime_error_string "Given expression could not be matched with some clause" in
+    (* TODO call write string and exit functions *)
+
+    let failed_block_phi_pair = (L.const_null (lltype_of_ty ty), match_failed_block) in
+    (* although never used, branch is structurally important *)
+    ignore(L.build_br match_finished_block builder);
+
+    (* fill match_finished block *)
+    let phi_pairs = failed_block_phi_pair :: value_block_phi_pairs in
+    L.position_at_end match_finished_block builder;
+    L.build_phi phi_pairs "tmp_match_phi" builder
+
+  and generate_ir_clause match_llvalue match_finished_block (idx_str, match_check_block, next_match_check_block) = function
   | TA.BasePattClause { base_pattern; expr; loc } ->
-    failwith "TODO"
+    (* build basic blocks match_success *)
+    let match_success_block = L.insert_block ctx ("match_success_" ^ idx_str) next_match_check_block in
+    
+    (* check if base_pattern matches expression and branch accordingly *)
+    L.position_at_end match_check_block builder;
+    let success_match_llvalue = generate_ir_base_pattern match_llvalue base_pattern in
+    ignore(L.build_cond_br success_match_llvalue match_success_block next_match_check_block builder);
+
+    (* fill success block *)
+    L.position_at_end match_success_block builder;
+    let success_llvalue = generate_ir_expr_aux expr in
+    ignore(L.build_br match_finished_block builder);
+    success_llvalue, match_success_block
   | TA.ConstrPattClause { constr_pattern; expr; loc } ->
-    failwith "TODO"
+    (* build basic blocks match_param_check and match_success *)
+    let match_param_check_block = L.insert_block ctx ("match_param_check_" ^ idx_str) next_match_check_block in
+    let match_success_block = L.insert_block ctx ("match_success_" ^ idx_str) next_match_check_block in
 
-  and generate_ir_base_pattern = function
-  | TA.BP_INT _ as bp -> failwith "TODO"
-  | TA.BP_FLOAT _ as bp -> failwith "TODO"
-  | TA.BP_CHAR _ as bp -> failwith "TODO"
-  | TA.BP_BOOL _ as bp -> failwith "TODO"
-  | TA.BP_ID { ty; name_sym; loc } -> failwith "TODO"
+    (* check if constr_pattern matches expression and branch accordingly *)
+    L.position_at_end match_check_block builder;
+    let success_match_llvalue = generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block constr_pattern in
+    ignore(L.build_cond_br success_match_llvalue match_success_block next_match_check_block builder);
 
-  and generate_ir_constr_pattern (TA.CP_BASIC { ty; constr_sym; base_patterns; loc }) =
-  failwith "TODO"
+    (* fill success block *)
+    L.position_at_end match_success_block builder;
+    let success_llvalue = generate_ir_expr_aux expr in
+    ignore(L.build_br match_finished_block builder);
+    success_llvalue, match_success_block
 
+  and generate_ir_base_pattern match_llvalue = function
+  | TA.BP_INT { num } -> 
+    L.build_icmp L.Icmp.Eq (const_int num) match_llvalue "pattern_comp" builder
+  | TA.BP_FLOAT { num } -> 
+    L.build_fcmp L.Fcmp.True (const_float num) match_llvalue "pattern_comp" builder
+  | TA.BP_CHAR { chr } -> 
+    L.build_icmp L.Icmp.Eq (const_char (int_of_char chr)) match_llvalue "pattern_comp" builder
+  | TA.BP_BOOL { value } -> 
+    L.build_icmp L.Icmp.Eq (const_bool value) match_llvalue "pattern_comp" builder
+  | TA.BP_ID { name_sym; loc } ->
+    let id_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
+    ignore(L.build_store match_llvalue id_addr builder);
+    const_bool true
+
+  and generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block (TA.CP_BASIC { ty; constr_sym; base_patterns; loc }) =
+    let llname = llname_of_constr_info constr_sym ty in
+    let tag, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
+      | Some (tag, lltype) -> tag, lltype
+      | None -> internal_error_of_msg_format (Some loc) "Some (tag, lltype)" "None" "constr_info_tbl" "pair"
+    in
+
+    (* check whether tags are equal *)
+    let match_tag_addr = L.build_struct_gep match_llvalue 0 "match_tag_addr" builder in
+    let match_tag = L.build_load match_tag_addr "match_tag_load" builder in
+    let match_cond = L.build_icmp L.Icmp.Eq (const_int tag) match_tag "tag_comp" builder in
+    ignore(L.build_cond_br match_cond match_param_check_block next_match_check_block builder);
+
+    (* fill match_param_check_block *)
+    L.position_at_end match_param_check_block builder;
+
+    (* cast userdef_struct pointer to specific constr struct pointer *)
+    let match_constr_struct = L.build_pointercast match_llvalue constr_struct_pointer_lltype "matched_type_to_constr_cast" builder in
+    print_llvalue "matched_casted_constr_struct" match_constr_struct;
+
+    (* create list with match_llvalues of constructor params *)
+    let load_from_constr_struct idx =
+      let addr = L.build_struct_gep match_constr_struct idx "temp_match_constr_param_load_addr" builder in
+      L.build_load addr "temp_match_constr_param_load" builder
+    in
+    (* create and of all constructor params matches *)
+    let create_and prev_cond match_llvalue base_pattern = 
+      let curr_cond = generate_ir_base_pattern match_llvalue base_pattern in
+      L.build_and prev_cond curr_cond "temp_constr_param_and" builder
+    in
+    let constr_params_of_match_llvalue = List.mapi (fun i _ -> load_from_constr_struct (i + 1)) base_patterns in
+    (* return single condition of successful match or not *)
+    List.fold_left2 create_and (const_bool true) constr_params_of_match_llvalue base_patterns
   in
   generate_ir_expr_aux expr
