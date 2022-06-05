@@ -382,8 +382,28 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
     failwith "TODO"
   | TA.E_ArrayDim { dim; name_sym } ->
+    (* create basic blocks dim_failed and dim_success *)
+    let function_block = builder |> L.insertion_block |> L.block_parent in
+    let dim_failed_block = L.append_block ctx "dim_bound_check_failed" function_block in
+    let dim_success_block = L.append_block ctx "dim_bound_check_success" function_block in
+
     let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
-    (* TODO array boundary check before gep instruction *)
+    (* check if dim <= dimNum, because semantic analysis checks (for sure) for dim >= 1 
+       remove first element which is array pointer *)
+    let dimNum = struct_addr |> L.type_of |> L.struct_element_types |> Array.length |> fun d -> d - 1 in
+    let bound_check = L.build_icmp L.Icmp.Sle (const_int dim) (const_int dimNum) "dim_bounds_check" builder in
+    ignore(L.build_cond_br bound_check dim_success_block dim_failed_block builder);
+
+    (* fill dim_failed_block *)
+    L.position_at_end dim_failed_block builder;
+    let runtime_error_str_ptr = runtime_error_string "Out of bounds error in array dim call" in
+    (* TODO call write string and exit functions *)
+
+    (* although never used, branch is structurally important *)
+    ignore(L.build_br dim_success_block builder);
+
+    (* fill dim_success_block *)
+    L.position_at_end dim_success_block builder;
     (* dim (as int constant >= 1) equals struct offset *)
     let dim_addr = L.build_struct_gep struct_addr dim "tmp_struct_dim_addr" builder in
     L.build_load dim_addr "tmp_struct_dim_load" builder
@@ -517,7 +537,6 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     ignore(L.build_store loop_llvalue count_var builder);
     L.add_incoming (start_llvalue, pre_loop_block) loop_llvalue;
     let cond_llvalue = cond_llfun loop_llvalue end_llvalue "cond" builder in
-    
     ignore(L.build_cond_br cond_llvalue body_block after_block builder);
 
     (* build body block *)
