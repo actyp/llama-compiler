@@ -9,8 +9,14 @@ let v_error_fmt = format_of_string "Unbound value %s"
 (** [t_error_fmt] format string on unbound type constructor *)
 and t_error_fmt = format_of_string "Unbound type constructor %s"
 
+(** [non_positive_dim_num_error_fmt] format string on invalid dim number *)
+and non_positive_dim_num_error_fmt = format_of_string "Number in dim expression should be a positive integer or missing (default is 1)"
+
 (** [invalid_dim_num_error_fmt] format string on invalid dim number *)
 and invalid_dim_num_error_fmt = format_of_string "Number in dim expression should be in range [%d, %d], based on dimensions of %s"
+
+(** [invalid_single_dim_num_error_fmt] format string on invalid dim number when on single-dimensional array *)
+and invalid_single_dim_num_error_fmt = format_of_string "Number in dim expression should be missing or equal to 1, based on dimensions of %s"
 
 (** [multiple_definitions_error_fmt] format string on multiple definitions in the same group *)
 and multiple_definitions_error_fmt = format_of_string "Multiple definitions of %s %s. Definition names in the same group should be unique."
@@ -69,8 +75,12 @@ let dim_opt_to_num loc venv name_sym = function
       internal_error loc "%s expected type of Types.ARRAY, instead found %s" name (T.ty_to_string other_ty)
     in
     if num >= min_dim && num <= max_dim
-    then num
-    else fatal_error loc invalid_dim_num_error_fmt min_dim max_dim name
+      then num
+    else if num <= 0 
+      then fatal_error loc non_positive_dim_num_error_fmt
+    else if max_dim = 1 
+      then fatal_error loc invalid_single_dim_num_error_fmt name 
+      else fatal_error loc invalid_dim_num_error_fmt min_dim max_dim name
 
 (* module for set of ints *)
 module IntSet = Set.Make( 

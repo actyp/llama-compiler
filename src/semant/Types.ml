@@ -62,7 +62,7 @@ let rec is_valid_type = function
   | REF (ARRAY _, _) | DYN_REF (ARRAY _, _) -> false
   | REF (t, _) | DYN_REF (t, _) -> is_valid_type t
   | ARRAY (_, ARRAY _) -> false
-  | ARRAY (d, t) -> d > 0 && is_valid_type t
+  | ARRAY (d, t) -> d >= 0 && is_valid_type t (* d = 0 is the generic array type *)
   | FUNC (param_tys, FUNC _) -> false
   | FUNC (param_tys, ret_ty) -> List.for_all is_valid_type (ret_ty::param_tys)
   | CONSTR (tys, USERDEF _, _) -> List.for_all is_valid_type tys

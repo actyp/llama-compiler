@@ -89,7 +89,7 @@ let lookup (st: U.subst_tbl) (ty: T.ty) loc =
         warn_flag := true; var_ty
       | Some bind_ty ->
         if generic_ty bind_ty
-        then (warn_flag := true; var_ty)
+        then (warn_flag := true; bind_ty)
         else lookup_aux bind_ty
       end
     | T.POLY _ as p -> internal_error loc "unsubstituted polymorphic %s found" (T.ty_to_string p)

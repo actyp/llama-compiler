@@ -71,6 +71,11 @@ let runtime_error_string msg =
   let error_str = "Runtime Error: " ^ msg ^ "\n" in
   get_global_string_pointer error_str
 
+let build_runtime_error msg =
+  let error_str = runtime_error_string msg in
+  (* TODO call write string and exit functions *)
+  ()
+
 let ll_name_of_userdef_ty = function
   | T.USERDEF (name_sym, occ_num) -> (S.name name_sym) ^ ":" ^ (string_of_int occ_num)
   | _ -> internal_error_of_msg_format None "USERDEF" "other type" "userdef_type_name_of" "type"
@@ -201,6 +206,7 @@ let build_func_frame_vars name_sym func_ty info_tbl =
     | (name_sym, ty) :: rest ->
       let name = S.name name_sym in
       let llvalue = L.build_alloca (lltype_of_ty ty) name builder in
+      print_llvalue "local_param" llvalue;
       add_llvalue_of_local_var name_sym llvalue;
       alloc_locals rest
   in
@@ -382,31 +388,19 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
     failwith "TODO"
   | TA.E_ArrayDim { dim; name_sym } ->
-    (* create basic blocks dim_failed and dim_success *)
-    let function_block = builder |> L.insertion_block |> L.block_parent in
-    let dim_failed_block = L.append_block ctx "dim_bound_check_failed" function_block in
-    let dim_success_block = L.append_block ctx "dim_bound_check_success" function_block in
-
+    (* bound check if 1 <= dim <= dimNum *)
     let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
-    (* check if dim <= dimNum, because semantic analysis checks (for sure) for dim >= 1 
-       remove first element which is array pointer *)
+    (* remove first element which is array pointer *)
     let dimNum = struct_addr |> L.type_of |> L.struct_element_types |> Array.length |> fun d -> d - 1 in
-    let bound_check = L.build_icmp L.Icmp.Sle (const_int dim) (const_int dimNum) "dim_bounds_check" builder in
-    ignore(L.build_cond_br bound_check dim_success_block dim_failed_block builder);
-
-    (* fill dim_failed_block *)
-    L.position_at_end dim_failed_block builder;
-    let runtime_error_str_ptr = runtime_error_string "Out of bounds error in array dim call" in
-    (* TODO call write string and exit functions *)
-
-    (* although never used, branch is structurally important *)
-    ignore(L.build_br dim_success_block builder);
-
-    (* fill dim_success_block *)
-    L.position_at_end dim_success_block builder;
-    (* dim (as int constant >= 1) equals struct offset *)
-    let dim_addr = L.build_struct_gep struct_addr dim "tmp_struct_dim_addr" builder in
-    L.build_load dim_addr "tmp_struct_dim_load" builder
+    if dim < 1 || dim > dimNum
+      then (
+        build_runtime_error "Out of bounds error in array dim call";
+        (* dummy return llvalue *)
+        const_int 0)
+      else
+        (* dim (as int constant >= 1) equals struct offset *)
+        let dim_addr = L.build_struct_gep struct_addr dim "tmp_struct_dim_addr" builder in
+        L.build_load dim_addr "tmp_struct_dim_load" builder
   | TA.E_New { ty } ->
     let malloc_addr = L.build_malloc (lltype_of_ty ty) "temp_malloc_for_new" builder in
     L.build_load malloc_addr "tmp_malloc_load_for_new" builder
@@ -579,9 +573,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
 
     (* fill match_failed block *)
     L.position_at_end match_failed_block builder;
-    let runtime_error_str_ptr = runtime_error_string "Given expression could not be matched with some clause" in
-    (* TODO call write string and exit functions *)
-
+    build_runtime_error "Given expression could not be matched with some clause";
     let failed_block_phi_pair = (L.const_null (lltype_of_ty ty), match_failed_block) in
     (* although never used, branch is structurally important *)
     ignore(L.build_br match_finished_block builder);

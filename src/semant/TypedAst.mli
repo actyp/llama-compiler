@@ -73,7 +73,7 @@ and tenv = T.ty_symboltable
 and env_tast = (venv * tenv * def) list
 
 (** [tast_from_env_tast env_tast] returns the tast from [env_tast] *)
-val tast_from_env_tast : env_tast -> def list
+val tast_from_env_tast : env_tast -> tast
 
 (** [pprint tast] pretty prints typed ast *)
 val pprint : tast -> unit
