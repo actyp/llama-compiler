@@ -222,6 +222,18 @@ let build_func_frame_vars name_sym func_ty info_tbl =
   ignore(L.build_br body_block builder);
   ignore(L.position_at_end body_block builder)
 
+let build_alloca_end_of_entry_block lltype name array_size_opt =
+  let instr_of_option = function
+    | None -> internal_error None "no instruction option specified in build_alloca_end_of_entry_block"
+    | Some i -> i
+  in
+  let entry_block_end_builder = builder |> L.insertion_block |> L.block_parent |> L.entry_block 
+    |> L.block_terminator |> instr_of_option |> L.builder_before ctx
+  in
+  match array_size_opt with
+  | None -> L.build_alloca lltype name entry_block_end_builder
+  | Some array_size -> L.build_array_alloca lltype array_size name  entry_block_end_builder
+
 let build_func_return ret_llvalue =
   ignore(L.build_ret ret_llvalue builder);
   ignore(function_frames_pop ())
@@ -235,13 +247,35 @@ let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dim
   let array_addr = match array_addr_opt with
   | Some addr -> addr
   | None ->
+    (* create basic blocks array_dec_dim_check_failed, array_dec_dim_check_success *)
+    let function_block = builder |> L.insertion_block |> L.block_parent in
+    let array_failed_block = L.append_block ctx "array_dec_dim_check_failed" function_block in
+    let array_success_block = L.append_block ctx "array_dec_dim_check_success" function_block in
+
+    (* check if all dim sizes are greater than zero with consecutive and *)
+    let create_and prev_and dim_size =
+      (* 0 < dim_size *)
+      let pos_dim_cond = L.build_icmp L.Icmp.Slt (const_int 0) dim_size "array_dec_dim_cond" builder in
+      L.build_and prev_and pos_dim_cond "temp_pos_dim_cond" builder
+    in
+    let dim_check = List.fold_left create_and (const_bool true) dims_len_llvalues in
+    ignore(L.build_cond_br dim_check array_success_block array_failed_block builder);
+
+    (* fill array_failed_block *)
+    L.position_at_end array_failed_block builder;
+    build_runtime_error "Non positive dimension size on array declaration";
+    (* although never used, branch is structurally important *)
+    ignore(L.build_br array_failed_block builder);
+
+    (* fill array_success_block *)
+    L.position_at_end array_success_block builder;
     (* calculate size as multiplication of dims *)
-    let array_size = List.fold_left (fun acc d -> L.build_mul d acc "temp_array_size" builder) (List.hd dims_len_llvalues) (List.tl dims_len_llvalues) in
+    let array_size = List.fold_left (fun acc d -> L.build_mul d acc "temp_array_size" builder) (const_int 1) dims_len_llvalues in
     print_llvalue "array_size" array_size;
     let elem_type = array_llty |> L.struct_element_types |> fun arr -> Array.get arr 0 |> L.element_type in
     print_lltype "array_llty" array_llty;
     print_lltype "elem_ty" elem_type;
-    let array_addr = L.build_array_alloca elem_type array_size "temp_array_alloca" builder in
+    let array_addr = build_alloca_end_of_entry_block elem_type "temp_array_alloca" (Some array_size) in
     print_llvalue "array_addr" array_addr;
     array_addr
   in
@@ -279,16 +313,6 @@ let create_named_type_structs (TA.TypeDec { name_sym; constrs }) =
   in
   create_userdef_named_struct_type ();
   create_constr_named_struct_types ()
-
-let build_alloca_end_of_entry_block lltype name =
-  let instr_of_option = function
-    | None -> internal_error None "no instruction option specified in build_alloca_end_of_entry_block"
-    | Some i -> i
-  in
-  let entry_block_end_builder = builder |> L.insertion_block |> L.block_parent |> L.entry_block 
-    |> L.block_terminator |> instr_of_option |> L.builder_before ctx
-  in
-  L.build_alloca lltype name entry_block_end_builder
 
 let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: E.info_tbl_t): L.llmodule =
   let init_depth = 0 in
@@ -398,11 +422,11 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
       L.build_load addr "temp_array_struct_load" builder
     in
     (* create and of all compares *)
-    let create_and prev_and upper_lim expr_num =
-      (* 0 <= expr_num <= upper_lim *)
+    let create_and prev_and dim_size expr_num =
+      (* 0 <= expr_num < dim_size *)
       let lower_cond = L.build_icmp L.Icmp.Sle (const_int 0) expr_num "array_lower_bound_check" builder in
       let lower_and = L.build_and prev_and lower_cond "temp_cond_lower_and" builder in
-      let upper_cond = L.build_icmp L.Icmp.Sle expr_num upper_lim "array_upper_bound_check" builder in
+      let upper_cond = L.build_icmp L.Icmp.Slt expr_num dim_size "array_upper_bound_check" builder in
       L.build_and lower_and upper_cond "temp_cond_upper_and" builder
     in
     let dim_sizes_ll = List.mapi (fun i _ -> load_from_array_struct (i + 1)) exprs_ll in
@@ -471,7 +495,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     print_lltype ("constr type: (tag = " ^ string_of_int tag ^ ")") constr_struct_pointer_lltype;
 
     (* allocate userdef struct *)
-    let userdef_struct = build_alloca_end_of_entry_block userdef_struct_lltype ("temp_userdef_type:" ^ (S.name name_sym)) in
+    let userdef_struct = build_alloca_end_of_entry_block userdef_struct_lltype ("temp_userdef_type:" ^ (S.name name_sym)) None in
     print_llvalue "userdef_struct" userdef_struct;
     
     (* store tag *)
@@ -480,7 +504,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
 
     if List.length param_exprs > 0 then begin
       (* allocate userdef struct pointer and store userdef struct *)
-      let userdef_struct_pointer = build_alloca_end_of_entry_block userdef_struct_pointer_lltype ("temp_userdef_pointer_type:" ^ (S.name name_sym)) in
+      let userdef_struct_pointer = build_alloca_end_of_entry_block userdef_struct_pointer_lltype ("temp_userdef_pointer_type:" ^ (S.name name_sym)) None in
       print_llvalue "userdef_struct_pointer" userdef_struct_pointer;
       ignore(L.build_store userdef_struct userdef_struct_pointer builder);
 
