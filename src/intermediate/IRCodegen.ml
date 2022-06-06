@@ -161,18 +161,6 @@ let find_function_in_module name_sym = match L.lookup_function (S.name name_sym)
     | Some f -> f
     | None -> internal_error None "function %s not found in the_module" (S.name name_sym)
   
-let build_frame_alloc func_name_sym esc_list =
-  let esc_list_lltypes = List.map (fun (_, ty) -> lltype_of_ty ty) esc_list in
-  let parent_struct_ptr_type = if function_frames_is_empty () 
-    then L.pointer_type bool_type 
-    else L.type_of (function_frames_top ()) (* stored addr is already a pointer*) in
-  print_lltype (S.name func_name_sym ^ " parent_struct_ptr") parent_struct_ptr_type;
-  let frame_type = struct_type (Array.of_list (parent_struct_ptr_type :: esc_list_lltypes)) in
-  print_lltype "frame_type" frame_type;
-  let frame_addr = L.build_alloca frame_type (S.name func_name_sym ^ ":frame") builder in
-  function_frames_push frame_addr;
-  frame_addr
-
 let declare_function name_sym func_ty =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "declare_function" (S.name name_sym)
@@ -194,6 +182,18 @@ let build_func_frame_vars name_sym func_ty info_tbl =
     | Some E.LocalVarInfo _ -> func_internal_error "function" "LocalVarInfo" name_sym
     | Some E.EscVarInfo _ -> func_internal_error "function" "EscVarInfo" name_sym
     | Some E.FuncInfo { local_list; esc_list } -> local_list, esc_list
+  in
+  let build_frame_alloc esc_list =
+    let esc_list_lltypes = List.map (fun (_, ty) -> lltype_of_ty ty) esc_list in
+    let parent_struct_ptr_type = if function_frames_is_empty () 
+      then L.pointer_type bool_type 
+      else L.type_of (function_frames_top ()) (* stored addr is already a pointer*) in
+    print_lltype (S.name name_sym ^ " parent_struct_ptr") parent_struct_ptr_type;
+    let frame_type = struct_type (Array.of_list (parent_struct_ptr_type :: esc_list_lltypes)) in
+    print_lltype "frame_type" frame_type;
+    let frame_addr = L.build_alloca frame_type (S.name name_sym ^ ":frame") builder in
+    function_frames_push frame_addr;
+    frame_addr
   in
   let add_llvalue_of_local_var name_sym llvalue = match E.tbl_find_opt info_tbl name_sym with
     | None -> func_internal_error "local" "None" name_sym
@@ -217,7 +217,7 @@ let build_func_frame_vars name_sym func_ty info_tbl =
   let entry_block = L.append_block ctx "entry" func in
   let body_block = L.append_block ctx "body" func in
   L.position_at_end entry_block builder;
-  ignore(build_frame_alloc name_sym esc_list);
+  ignore(build_frame_alloc esc_list);
   alloc_locals local_list;
   ignore(L.build_br body_block builder);
   ignore(L.position_at_end body_block builder)
@@ -281,7 +281,7 @@ let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dim
   in
   let array_struct_addr = match array_struct_addr_opt with
     | Some addr -> addr
-    | None -> L.build_alloca array_llty name builder
+    | None -> build_alloca_end_of_entry_block array_llty name None
   in
   print_llvalue "array_struct_addr" array_struct_addr;
   List.iteri (fun i llv -> store_to_struct array_struct_addr i llv) (array_addr :: dims_len_llvalues)
