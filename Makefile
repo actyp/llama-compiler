@@ -2,7 +2,7 @@
 
 default: llama
 
-OCB_FLAGS = -use-ocamlfind -Is src,src/parsing,src/semant,src/intermediate,src/common
+OCB_FLAGS = -use-ocamlfind -Is src,src/parsing,src/semant,src/intermediate,src/utils
 OCB = ocamlbuild $(OCB_FLAGS)
 
 define check_installed
