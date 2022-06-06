@@ -228,7 +228,7 @@ let build_func_return ret_llvalue =
 
 let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dims_len_llvalues =
   let store_to_struct ll_struct index value =
-    let addr = L.build_struct_gep ll_struct index "tmp_struct_store_addr" builder in
+    let addr = L.build_struct_gep ll_struct index "temp_struct_store_addr" builder in
     print_llvalue "addr" addr;
     ignore(L.build_store value addr builder)
   in
@@ -236,12 +236,12 @@ let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dim
   | Some addr -> addr
   | None ->
     (* calculate size as multiplication of dims *)
-    let array_size = List.fold_left (fun acc d -> L.build_mul d acc "tmp_array_size" builder) (List.hd dims_len_llvalues) (List.tl dims_len_llvalues) in
+    let array_size = List.fold_left (fun acc d -> L.build_mul d acc "temp_array_size" builder) (List.hd dims_len_llvalues) (List.tl dims_len_llvalues) in
     print_llvalue "array_size" array_size;
     let elem_type = array_llty |> L.struct_element_types |> fun arr -> Array.get arr 0 |> L.element_type in
     print_lltype "array_llty" array_llty;
     print_lltype "elem_ty" elem_type;
-    let array_addr = L.build_array_alloca elem_type array_size "tmp_array_alloca" builder in
+    let array_addr = L.build_array_alloca elem_type array_size "temp_array_alloca" builder in
     print_llvalue "array_addr" array_addr;
     array_addr
   in
@@ -383,10 +383,57 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.E_Unit { ty } -> 
     L.const_null (lltype_of_ty ty)
   | TA.E_ArrayRef { name_sym; exprs } ->
-    let exprs_ll = List.map generate_ir_expr_aux exprs in
-    (* TODO generate mapped boundary check *)
+    (* create basic blocks array_ref_bound_check_failed, array_ref_bound_check_success *)
+    let function_block = builder |> L.insertion_block |> L.block_parent in
+    let array_failed_block = L.append_block ctx "array_ref_bound_check_failed" function_block in
+    let array_success_block = L.append_block ctx "array_ref_bound_check_success" function_block in
+
+    (* get array_struct_addr and generate dim expressions *)
     let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
-    failwith "TODO"
+    let exprs_ll = List.map generate_ir_expr_aux exprs in
+    
+    (* bound check *)
+    let load_from_array_struct idx =
+      let addr = L.build_struct_gep struct_addr idx "temp_array_struct_load_addr" builder in
+      L.build_load addr "temp_array_struct_load" builder
+    in
+    (* create and of all compares *)
+    let create_and prev_and upper_lim expr_num =
+      (* 0 <= expr_num <= upper_lim *)
+      let lower_cond = L.build_icmp L.Icmp.Sle (const_int 0) expr_num "array_lower_bound_check" builder in
+      let lower_and = L.build_and prev_and lower_cond "temp_cond_lower_and" builder in
+      let upper_cond = L.build_icmp L.Icmp.Sle expr_num upper_lim "array_upper_bound_check" builder in
+      L.build_and lower_and upper_cond "temp_cond_upper_and" builder
+    in
+    let dim_sizes_ll = List.mapi (fun i _ -> load_from_array_struct (i + 1)) exprs_ll in
+    let bound_check = List.fold_left2 create_and (const_bool true) dim_sizes_ll exprs_ll in
+    ignore(L.build_cond_br bound_check array_success_block array_failed_block builder);
+
+    (* fill array_failed_block *)
+    L.position_at_end array_failed_block builder;
+    build_runtime_error "Out of bounds error in array ref call";
+    (* although never used, branch is structurally important *)
+    ignore(L.build_br array_failed_block builder);
+
+    (* fill array_success_block *)
+    L.position_at_end array_success_block builder;
+    (* define helper funcions *)
+    let rec split_last_elem acc = function
+      | [] -> internal_error None "empty list encountered in split_last_elem"
+      | [x] -> List.rev acc, x
+      | x :: xs -> split_last_elem (x :: acc) xs
+    in
+    let add_dim_offset prev_add expr dim_size =
+      let dim_offset = L.build_mul expr dim_size "temp_dim_offset_mul" builder in
+      L.build_add prev_add dim_offset "temp_add_array_index" builder
+    in
+    (* calculate array_index = last_expr_num + Σ(expr_num * dim_size) *)
+    let first_exprs_ll, last_expr_ll = split_last_elem [] exprs_ll in
+    let first_dim_sizes, _ = split_last_elem [] dim_sizes_ll in
+    let array_index = List.fold_left2 add_dim_offset last_expr_ll first_exprs_ll first_dim_sizes in
+    (* return requested array element pointer -- done with gep *)
+    let array_ptr = load_from_array_struct 0 in
+    L.build_gep array_ptr [| array_index |] "temp_array_element_gep" builder
   | TA.E_ArrayDim { dim; name_sym } ->
     (* bound check if 1 <= dim <= dimNum *)
     let struct_addr = find_llvalue_addr_of_var name_sym depth info_tbl in
@@ -399,11 +446,11 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
         const_int 0)
       else
         (* dim (as int constant >= 1) equals struct offset *)
-        let dim_addr = L.build_struct_gep struct_addr dim "tmp_struct_dim_addr" builder in
-        L.build_load dim_addr "tmp_struct_dim_load" builder
+        let dim_addr = L.build_struct_gep struct_addr dim "temp_struct_dim_addr" builder in
+        L.build_load dim_addr "temp_struct_dim_load" builder
   | TA.E_New { ty } ->
     let malloc_addr = L.build_malloc (lltype_of_ty ty) "temp_malloc_for_new" builder in
-    L.build_load malloc_addr "tmp_malloc_load_for_new" builder
+    L.build_load malloc_addr "temp_malloc_load_for_new" builder
   | TA.E_Delete { ty; expr } ->
     let llvalue = generate_ir_expr_aux expr in
     ignore(L.build_free llvalue builder);
@@ -411,7 +458,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.E_FuncCall { ty; name_sym; param_exprs } ->
     let callee = find_function_in_module name_sym in
     let param_llvalues = List.map generate_ir_expr_aux param_exprs in
-    L.build_call callee (Array.of_list param_llvalues) ("temp_call") builder
+    L.build_call callee (Array.of_list param_llvalues) "temp_call" builder
   | TA.E_ConstrCall { ty; name_sym; param_exprs; loc} ->
     let userdef_struct_pointer_lltype = lltype_of_ty ty in
     let userdef_struct_lltype = L.element_type userdef_struct_pointer_lltype in
@@ -444,7 +491,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
       (* store all other parameters to constr_struct *)
       let param_llvalues = List.map generate_ir_expr_aux param_exprs in
       let store_to_constr_struct idx value =
-        let addr = L.build_struct_gep constr_struct idx "tmp_constr_struct_store_addr" builder in
+        let addr = L.build_struct_gep constr_struct idx "temp_constr_struct_store_addr" builder in
         ignore(L.build_store value addr builder)
       in
       List.iteri (fun idx llvalue -> store_to_constr_struct (idx + 1) llvalue) param_llvalues
@@ -480,7 +527,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
 
     (* build phi node on merge block and return phi value *)
     L.position_at_end merge_block builder;
-    L.build_phi [(then_llvalue, then_block); (else_llvalue, else_block)] "tmp_phi" builder
+    L.build_phi [(then_llvalue, then_block); (else_llvalue, else_block)] "temp_phi" builder
   | TA.E_WhileDoDone  { ty; while_expr; do_expr; loc} ->
     (* build basic blocks check, body and after *)
     let function_block = builder |> L.insertion_block |> L.block_parent in
@@ -574,14 +621,12 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     (* fill match_failed block *)
     L.position_at_end match_failed_block builder;
     build_runtime_error "Given expression could not be matched with some clause";
-    let failed_block_phi_pair = (L.const_null (lltype_of_ty ty), match_failed_block) in
     (* although never used, branch is structurally important *)
-    ignore(L.build_br match_finished_block builder);
+    ignore(L.build_br match_failed_block builder);
 
     (* fill match_finished block *)
-    let phi_pairs = failed_block_phi_pair :: value_block_phi_pairs in
     L.position_at_end match_finished_block builder;
-    L.build_phi phi_pairs "tmp_match_phi" builder
+    L.build_phi value_block_phi_pairs "temp_match_phi" builder
 
   and generate_ir_clause match_llvalue match_finished_block (idx_str, match_check_block, next_match_check_block) = function
   | TA.BasePattClause { base_pattern; expr; loc } ->
@@ -654,9 +699,9 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
       L.build_load addr "temp_match_constr_param_load" builder
     in
     (* create and of all constructor params matches *)
-    let create_and prev_cond match_llvalue base_pattern = 
+    let create_and prev_and match_llvalue base_pattern = 
       let curr_cond = generate_ir_base_pattern match_llvalue base_pattern in
-      L.build_and prev_cond curr_cond "temp_constr_param_and" builder
+      L.build_and prev_and curr_cond "temp_constr_param_and" builder
     in
     let constr_params_of_match_llvalue = List.mapi (fun i _ -> load_from_constr_struct (i + 1)) base_patterns in
     (* return single condition of successful match or not *)
