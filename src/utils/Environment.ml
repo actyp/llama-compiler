@@ -102,10 +102,22 @@ let string_management_functions =
     ("strcat", fun_ty [string_ty (); string_ty ()] T.UNIT);
   ]
 
+(** [function_names func_list] returns a list containing only the names of the [func_list] *)
+let function_names func_list = List.map (fun (name, _) -> name) func_list
+
 (** [augment_env env l] returns the augmented environment from initial [env] and list of pairs [l] *)
 let rec augment_env env = function
   | [] -> env
   | (s, ty) :: rest -> augment_env (S.enter env (S.symbol s) ty) rest
+
+let unary_operator_names = function_names unary_operator_functions
+
+let binary_operator_names = function_names binary_operator_functions
+
+let external_functions = [
+  io_functions; mathematical_functions; increment_functions;
+  conversion_functions; string_management_functions
+]
 
 let initial_envs () =
   let venv_pairs = [

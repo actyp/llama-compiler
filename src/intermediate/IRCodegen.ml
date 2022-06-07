@@ -1,4 +1,5 @@
-module E = Escape
+module Env = Environment
+module Esc = Escape
 module H = Hashtbl
 module L = Llvm
 module LAN = Llvm_analysis
@@ -62,14 +63,25 @@ and const_bool b = L.const_int bool_type (if b then 1 else 0)
 and const_float f = L.const_float float_type f
 
 
-let get_global_string_pointer string_value =
-  let string_ptr = L.build_global_stringptr string_value "str" builder in
-  tbl_add global_str_tbl string_value string_ptr;
-  string_ptr
+module StringSet = Set.Make(String)
+
+let unary_operator_name_set = List.fold_left (fun set str -> StringSet.add str set)  StringSet.empty Env.unary_operator_names
+and binary_operator_name_set = List.fold_left (fun set str -> StringSet.add str set)  StringSet.empty Env.binary_operator_names
+
+let is_unary_operator name_sym = StringSet.mem (S.name name_sym) unary_operator_name_set
+and is_binary_operator name_sym = StringSet.mem (S.name name_sym) binary_operator_name_set
+
+let get_or_build_global_string_pointer string_value =
+  match tbl_find_opt global_str_tbl string_value with
+  | Some string_ptr -> string_ptr
+  | None ->
+    let string_ptr = L.build_global_stringptr string_value "str" builder in
+    tbl_add global_str_tbl string_value string_ptr;
+    string_ptr
 
 let runtime_error_string msg =
   let error_str = "Runtime Error: " ^ msg ^ "\n" in
-  get_global_string_pointer error_str
+  get_or_build_global_string_pointer error_str
 
 let build_runtime_error msg =
   let error_str = runtime_error_string msg in
@@ -139,16 +151,16 @@ let find_llvalue_addr_of_var name_sym current_depth info_tbl =
   let func_internal_error expected found =
     internal_error_of_msg_format None expected found "find_llvalue_addr_of_var" (S.name name_sym)
   in
-  match E.tbl_find_opt info_tbl name_sym with
+  match Esc.tbl_find_opt info_tbl name_sym with
   | None -> func_internal_error "var" "None"
-  | Some E.FuncInfo _ -> func_internal_error "var" "FuncInfo"
-  | Some E.LocalVarInfo { llvalue_opt } ->
+  | Some Esc.FuncInfo _ -> func_internal_error "var" "FuncInfo"
+  | Some Esc.LocalVarInfo { llvalue_opt } ->
     (* assuming info_tbl is correct, a local is found only in local scope while parsing *)
     begin match llvalue_opt with
     | None -> func_internal_error "local" "None" (* should have been allocated on it's function entry block *)
     | Some llvalue_addr -> llvalue_addr
     end
-  | Some E.EscVarInfo { dec_depth; frame_offset } ->
+  | Some Esc.EscVarInfo { dec_depth; frame_offset } ->
     let name = S.name name_sym in
     let current_frame = function_frames_top () in
     let declaration_frame = find_declaration_frame current_frame current_depth dec_depth in
@@ -177,11 +189,11 @@ let build_func_frame_vars name_sym func_ty info_tbl =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "build_func_frame_vars" (S.name name_sym)
   in
-  let local_list, esc_list = match E.tbl_find_opt info_tbl name_sym with
+  let local_list, esc_list = match Esc.tbl_find_opt info_tbl name_sym with
     | None -> func_internal_error "function" "None" name_sym
-    | Some E.LocalVarInfo _ -> func_internal_error "function" "LocalVarInfo" name_sym
-    | Some E.EscVarInfo _ -> func_internal_error "function" "EscVarInfo" name_sym
-    | Some E.FuncInfo { local_list; esc_list } -> local_list, esc_list
+    | Some Esc.LocalVarInfo _ -> func_internal_error "function" "LocalVarInfo" name_sym
+    | Some Esc.EscVarInfo _ -> func_internal_error "function" "EscVarInfo" name_sym
+    | Some Esc.FuncInfo { local_list; esc_list } -> local_list, esc_list
   in
   let build_frame_alloc esc_list =
     let esc_list_lltypes = List.map (fun (_, ty) -> lltype_of_ty ty) esc_list in
@@ -195,11 +207,11 @@ let build_func_frame_vars name_sym func_ty info_tbl =
     function_frames_push frame_addr;
     frame_addr
   in
-  let add_llvalue_of_local_var name_sym llvalue = match E.tbl_find_opt info_tbl name_sym with
+  let add_llvalue_of_local_var name_sym llvalue = match Esc.tbl_find_opt info_tbl name_sym with
     | None -> func_internal_error "local" "None" name_sym
-    | Some E.EscVarInfo _ -> func_internal_error "local" "EscVarInfo" name_sym
-    | Some E.FuncInfo _ -> func_internal_error "local" "FuncInfo" name_sym
-    | Some E.LocalVarInfo (_ as record) -> E.tbl_add info_tbl name_sym (E.LocalVarInfo { record with llvalue_opt = Some llvalue })
+    | Some Esc.EscVarInfo _ -> func_internal_error "local" "EscVarInfo" name_sym
+    | Some Esc.FuncInfo _ -> func_internal_error "local" "FuncInfo" name_sym
+    | Some Esc.LocalVarInfo (_ as record) -> Esc.tbl_add info_tbl name_sym (Esc.LocalVarInfo { record with llvalue_opt = Some llvalue })
   in
   let rec alloc_locals = function
     | [] -> ()
@@ -314,31 +326,195 @@ let create_named_type_structs (TA.TypeDec { name_sym; constrs }) =
   create_userdef_named_struct_type ();
   create_constr_named_struct_types ()
 
-let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: E.info_tbl_t): L.llmodule =
+let declare_external_functions (external_functions: (string * T.ty) list list) =
+  let rec declare_from_list = function
+    | [] -> ()
+    | (name, ty) :: rest -> ignore(declare_function (name, 0) ty); declare_from_list rest 
+  in
+  List.iter declare_from_list external_functions
+
+let build_unary_operator name_sym param_exprs generate_ir_fun = 
+  let op_name = S.name name_sym in
+  let param_ll = match param_exprs with
+    | [p] -> generate_ir_fun p 
+    | _ -> internal_error None "non-single parameter provided to unary operator: %s" op_name
+  in
+  match StringSet.find_opt op_name unary_operator_name_set with
+  | None -> internal_error None "unsupported unary operator: %s" op_name
+  | Some _ -> match op_name with
+    | "( ~+ )" -> param_ll
+    | "( ~- )" -> L.build_mul (const_int (-1)) param_ll "unary_int_neg_mul" builder
+    | "( ~+. )" -> param_ll
+    | "( ~-. )" -> L.build_mul (const_float (-1.0)) param_ll "unary_float_neg_mul" builder
+    | "( ! )" -> L.build_load param_ll "unary_ref" builder
+    | "( not )" -> L.build_not param_ll "unary_not" builder
+    | _ -> internal_error None "unsupported unary operator: %s" op_name
+
+let build_binary_operator_enhanced_funs () =
+  let build_division_fun name_sym elem_type ll_cmp_fun ll_div_fun = 
+    let func_lltype = L.function_type elem_type [| elem_type; elem_type |] in
+    let func = L.declare_function (S.name name_sym) func_lltype the_module in
+    L.set_gc (Some "ocaml") func;
+
+    (* create basic_blocks entry, runtime_error, non_runtime_error *)
+    let entry_block = L.append_block ctx "entry" func in
+    let error_block = L.append_block ctx "runtime_error" func in
+    let body_block = L.append_block ctx "body" func in
+    
+    (* create different builder *)
+    let builder = L.builder_at_end ctx entry_block in
+    
+    (* take params *)
+    let param1 = L.param func 0 in
+    let param2 = L.param func 1 in
+
+    (* fill entry_block *)
+    let cond = ll_cmp_fun param2 "denom_zero_comp" builder in
+    ignore(L.build_cond_br cond error_block body_block builder);
+
+    (* fill runtime_error block *)
+    L.position_at_end error_block builder;
+    build_runtime_error "Division by zero";
+    ignore(L.build_br error_block builder);
+
+    (* fill non_runtime_error block *)
+    L.position_at_end body_block builder;
+    let ret = ll_div_fun param1 param2 "division" builder in
+    ignore(L.build_ret ret builder)
+  in
+
+  build_division_fun ("_binary_int_division", 0) int_type (L.build_icmp L.Icmp.Eq (const_int 0)) L.build_sdiv;
+  build_division_fun ("_binary_float_division", 0)  float_type (L.build_fcmp L.Fcmp.Oeq (const_float 0.0)) L.build_fdiv
+
+let build_binary_operator name_sym param_exprs generate_ir_fun =
+  let op_name = S.name name_sym in
+  (* param2 to be generated on need, in order to support short-circuit behavior *)
+  let p1_ll, p2_expr = match param_exprs with
+    | [p1; p2] -> generate_ir_fun p1, p2
+    | _ -> internal_error None "non-double parameter provided to binary operator: %s" op_name
+  in
+  let gen_p2 () = generate_ir_fun p2_expr
+  in
+  let call_after_lookup name param_array var_name =
+    let func = find_function_in_module (name, 0) in
+    L.build_call func param_array var_name builder
+  in
+  let int_char_float_cmp (itp, ftp) p1_ll = match L.type_of p1_ll with
+    | t when t = int_type || t = char_type -> L.build_icmp itp p1_ll
+    | t when t = float_type -> L.build_fcmp ftp p1_ll
+    | _ -> internal_error None "invalid type provided to int_char_float_cmp"
+  in
+  let build_short_circuited_logical_oper short_llvalue ll_lgc_fun =
+    (* create basic_blocks logical_non_short_circuit, logical_continue *)
+    let current_block = builder |> L.insertion_block in
+    let function_block = current_block |> L.block_parent in
+    let non_short_block = L.append_block ctx "logical_non_short_circuit" function_block in
+    let continue_block = L.append_block ctx "logical_continue" function_block in
+    
+    (* fill current block *)
+    let cond = L.build_icmp L.Icmp.Eq short_llvalue p1_ll "short_circuit_check" builder in
+    ignore(L.build_cond_br cond continue_block non_short_block builder);
+
+    (* fill non_short_circuit block *)
+    L.position_at_end non_short_block builder;
+    (* generate p2_ll in this block *)
+    let p2_ll = gen_p2 () in
+    let full_llvalue = ll_lgc_fun p1_ll p2_ll "logical_function" builder in
+    ignore(L.build_br continue_block builder);
+
+    (* fill continue block *)
+    L.position_at_end continue_block builder;
+    L.build_phi [(short_llvalue, current_block); (full_llvalue, non_short_block)] "temp_phi" builder
+  in
+  match StringSet.find_opt op_name binary_operator_name_set with
+  | None -> internal_error None "unsupported binary operator: %s" op_name
+  | Some _ -> match op_name with
+    | "( + )" -> 
+      let p2_ll = gen_p2 () in 
+      L.build_add p1_ll p2_ll "binary_int_add" builder
+    | "( - )" -> 
+      let p2_ll = gen_p2 () in 
+      L.build_sub p1_ll p2_ll "binary_int_sub" builder
+    | "( * )" -> 
+      let p2_ll = gen_p2 () in 
+      L.build_mul p1_ll p2_ll "binary_int_mul" builder
+    | "( / )" -> 
+      let p2_ll = gen_p2 () in 
+      call_after_lookup "_binary_int_division" [| p1_ll; p2_ll |] "binary_int_division"
+    | "( +. )" -> 
+      let p2_ll = gen_p2 () in 
+      L.build_fadd p1_ll p2_ll "binary_float_add" builder
+    | "( -. )" -> 
+      let p2_ll = gen_p2 () in 
+      L.build_fsub p1_ll p2_ll "binary_float_sub" builder
+    | "( *. )" -> 
+      let p2_ll = gen_p2 () in
+      L.build_fmul p1_ll p2_ll "binary_float_mul" builder
+    | "( /. )" -> 
+      let p2_ll = gen_p2 ()
+      in call_after_lookup "_binary_float_division" [| p1_ll; p2_ll |] "binary_float_division"
+    | "( mod )" -> 
+      let p2_ll = gen_p2 () in 
+      L.build_srem p1_ll p2_ll "binary_int_mod" builder
+    | "( ** )" -> 
+      failwith "TODO binary_float_pow"
+    | "( = )" -> 
+      failwith "TODO binary_struct_equal"
+    | "( <> )" -> 
+      failwith "TODO binary_struct_unequal"
+    | "( < )" -> 
+      let p2_ll = gen_p2 () in 
+      int_char_float_cmp (L.Icmp.Slt, L.Fcmp.Olt) p1_ll p2_ll "binary_lt" builder
+    | "( > )" -> 
+      let p2_ll = gen_p2 () in
+      int_char_float_cmp (L.Icmp.Sgt, L.Fcmp.Ogt) p1_ll p2_ll "binary_gt" builder
+    | "( <= )" -> 
+      let p2_ll = gen_p2 () in
+      int_char_float_cmp (L.Icmp.Sle, L.Fcmp.Ole) p1_ll p2_ll "binary_leq" builder
+    | "( >= )" -> 
+      let p2_ll = gen_p2 () in
+      int_char_float_cmp (L.Icmp.Sge, L.Fcmp.Oge) p1_ll p2_ll "binary_geq" builder
+    | "( == )" -> 
+      failwith "TODO binary_nat_equal"
+    | "( != )" -> 
+      failwith "TODO binary_nat_unequal"
+    | "( && )" -> 
+      build_short_circuited_logical_oper (const_bool false) L.build_and
+    | "( || )" -> 
+      build_short_circuited_logical_oper (const_bool true) L.build_or
+    | "( ; )" ->
+      gen_p2 ()
+    | "( := )" -> 
+      let p2_ll = gen_p2 () in 
+      ignore(L.build_store p2_ll p1_ll builder); 
+      L.const_null (lltype_of_ty T.UNIT)
+    | _ -> 
+      internal_error None "unsupported binary operator: %s" op_name
+
+let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: Esc.info_tbl_t): L.llmodule =
+  declare_external_functions Env.external_functions;
+  build_func_frame_vars ("entry_func", 0) (T.FUNC ([], T.INT)) info_tbl;
+  build_binary_operator_enhanced_funs ();
+
   let init_depth = 0 in
-  let entry_func_name_sym = ("entry_func", 0) in
-  let entry_func_ty = T.FUNC ([], T.INT) in
-  build_func_frame_vars entry_func_name_sym entry_func_ty info_tbl;
-  
   List.iter (generate_ir_def (init_depth + 1) info_tbl) tast;
   
-  let entry_ret_llvalue = const_int 0 in
-  build_func_return entry_ret_llvalue;
+  build_func_return (const_int 0);
 
   match LAN.verify_module the_module with
   | None -> the_module
   | Some reason -> pprint the_module; internal_error None "Verification error: %s" reason
-
+  
 and generate_ir_def depth info_tbl = function
   | TA.LetDefNonRec { decs } ->
-    List.iter (generate_ir_non_rec_dec depth info_tbl) decs
+    List.iter (generate_ir_dec depth info_tbl) decs
   | TA.LetDefRec { decs } ->
     let declare_only_func = function 
       | TA.FunctionDec { ty; name_sym } -> ignore(declare_function name_sym ty) (* functions need to be parsed and declared *)
       | _ -> () (* others being in info_tbl are already allocated in entry block of current function *)
     in
     List.iter declare_only_func decs;
-    List.iter (generate_ir_non_rec_dec depth info_tbl) decs
+    List.iter (generate_ir_dec depth info_tbl) decs
   | TA.TypeDef { tdecs } ->
     let ensure_declared_userdef_type (TA.TypeDec { name_sym; constrs }) = 
       (* use lltype_of_ty to retrieve already declared type or declare new type.
@@ -349,7 +525,7 @@ and generate_ir_def depth info_tbl = function
     List.iter ensure_declared_userdef_type tdecs; (* decalare non-yet-declared custom types *)
     List.iter create_named_type_structs tdecs (* create struct types for opaque declared userdef type and constructor types *)
 
-and generate_ir_non_rec_dec depth info_tbl = function
+and generate_ir_dec depth info_tbl = function
   | TA.ConstVarDec { ty; name_sym; value } ->
     let llvalue = generate_ir_expr depth info_tbl value in
     begin match value with
@@ -398,10 +574,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.E_Char { ty; value } -> 
     L.const_int (lltype_of_ty ty) (int_of_char value)
   | TA.E_String  { value } ->
-    begin match tbl_find_opt global_str_tbl value with
-    | Some string_ptr -> string_ptr
-    | None -> get_global_string_pointer value
-    end
+    get_or_build_global_string_pointer value
   | TA.E_BOOL { ty; value } -> 
     L.const_int (lltype_of_ty ty) (if value then 1 else 0)
   | TA.E_Unit { ty } -> 
@@ -480,9 +653,14 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     ignore(L.build_free llvalue builder);
     L.const_null (lltype_of_ty ty)
   | TA.E_FuncCall { ty; name_sym; param_exprs } ->
-    let callee = find_function_in_module name_sym in
-    let param_llvalues = List.map generate_ir_expr_aux param_exprs in
-    L.build_call callee (Array.of_list param_llvalues) "temp_call" builder
+    if is_unary_operator name_sym 
+      then build_unary_operator name_sym param_exprs generate_ir_expr_aux
+    else if is_binary_operator name_sym 
+      then build_binary_operator name_sym param_exprs generate_ir_expr_aux
+    else
+      let callee = find_function_in_module name_sym in
+      let param_llvalues = List.map generate_ir_expr_aux param_exprs in
+      L.build_call callee (Array.of_list param_llvalues) "temp_call" builder
   | TA.E_ConstrCall { ty; name_sym; param_exprs; loc} ->
     let userdef_struct_pointer_lltype = lltype_of_ty ty in
     let userdef_struct_lltype = L.element_type userdef_struct_pointer_lltype in
