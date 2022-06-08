@@ -88,13 +88,17 @@ let build_runtime_error msg =
   (* TODO call write string and exit functions *)
   ()
 
-let ll_name_of_userdef_ty = function
+let llname_userdef_of_userdef_ty = function
   | T.USERDEF (name_sym, occ_num) -> (S.name name_sym) ^ ":" ^ (string_of_int occ_num)
-  | _ -> internal_error_of_msg_format None "USERDEF" "other type" "userdef_type_name_of" "type"
+  | _ -> internal_error_of_msg_format None "USERDEF" "other type" "llname_userdef_of_userdef_ty" "type"
 
-let llname_of_constr_info name_sym userdef_ty =
-  let userdef_ty_name =  ll_name_of_userdef_ty userdef_ty in
+let llname_constr_of_constr_info name_sym userdef_ty =
+  let userdef_ty_name =  llname_userdef_of_userdef_ty userdef_ty in
   userdef_ty_name ^ ":" ^ (S.name name_sym)
+
+let llname_equality_fun_of_userdef_ty = function
+  | T.USERDEF _ as ty -> "_" ^ (llname_userdef_of_userdef_ty ty) ^ "_equality"
+  | _ -> internal_error_of_msg_format None "USERDEF" "other type" "llname_equality_fun_of_userdef_ty" "type"
 
 let userdef_ty_of_constr_ty = function
   | T.CONSTR (_, ty, _) -> ty
@@ -125,7 +129,7 @@ let rec lltype_of_ty: T.ty -> L.lltype = function
   | T.USERDEF (name_sym, occ_num) as ty -> 
     (* userdef type is pointer to a named struct, 'name:occ_num' = { int_tag; largest constructor type size } 
        (implementing tagged union), created elsewhere and only queried from here *)
-    let userdef_type_name = ll_name_of_userdef_ty ty in
+    let userdef_type_name = llname_userdef_of_userdef_ty ty in
     begin match L.type_by_name the_module userdef_type_name with
       | Some lltype -> L.pointer_type lltype
       | None -> L.pointer_type (L.named_struct_type ctx userdef_type_name) (* just declare the opaque type *)
@@ -182,7 +186,6 @@ let declare_function name_sym func_ty =
     | _ -> func_internal_error "Types.FUNC" "other type" name_sym
   in
   let func = L.declare_function (S.name name_sym) func_type the_module in
-  L.set_gc (Some "ocaml") func;
   func
 
 let build_func_frame_vars name_sym func_ty info_tbl =
@@ -298,7 +301,30 @@ let build_array_llvalue name array_llty array_struct_addr_opt array_addr_opt dim
   print_llvalue "array_struct_addr" array_struct_addr;
   List.iteri (fun i llv -> store_to_struct array_struct_addr i llv) (array_addr :: dims_len_llvalues)
 
-let create_named_type_structs (TA.TypeDec { name_sym; constrs }) =
+let build_equality_check is_struct p1_ll p2_ll = function
+  | T.UNIT -> 
+    const_bool true
+  | T.INT | T.CHAR | T.BOOL -> 
+    L.build_icmp L.Icmp.Eq p1_ll p2_ll "int_equality_check" builder
+  | T.FLOAT -> 
+    L.build_fcmp L.Fcmp.Oeq p1_ll p2_ll "float_equality_check" builder
+  | T.REF _ | T.DYN_REF _ -> 
+    let ptr_diff = L.build_ptrdiff p1_ll p2_ll "ptr_diff" builder in
+    L.build_icmp L.Icmp.Eq (const_int 0) ptr_diff "ref_equality_check" builder
+  | T.USERDEF _ as userdef_ty -> 
+    begin match is_struct with
+    | false ->
+      let ptr_diff = L.build_ptrdiff p1_ll p2_ll "ptr_diff" builder in
+      L.build_icmp L.Icmp.Eq (const_int 0) ptr_diff "constr_nat_equality" builder
+    | true -> 
+      let func_name = llname_equality_fun_of_userdef_ty userdef_ty in
+      let constr_eq_fun = find_function_in_module (func_name, 0) in
+      L.build_call constr_eq_fun [| p1_ll; p2_ll |] "constr_eq_call" builder
+    end
+  | _ as ty -> 
+    internal_error None "unsupported type %s in equality check" (T.ty_to_string ty)
+
+let create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }) =
   let userdef_ty =  constrs |> List.hd |> userdef_ty_of_constr in
   let constr_lltypes = List.map (fun (TA.Constr { ty }) -> lltype_of_ty ty |> L.element_type) constrs in
   List.iteri (fun i ty -> print_lltype (string_of_int i) ty) constr_lltypes;
@@ -314,7 +340,7 @@ let create_named_type_structs (TA.TypeDec { name_sym; constrs }) =
   
   and create_constr_named_struct_types () =
     let create_constr_named_struct_type (TA.Constr { name_sym; index }) lltype =
-      let struct_name = llname_of_constr_info name_sym userdef_ty in
+      let struct_name = llname_constr_of_constr_info name_sym userdef_ty in
       let struct_lltype = L.named_struct_type ctx struct_name in
       L.struct_set_body struct_lltype (L.struct_element_types lltype) false;
       print_lltype struct_name struct_lltype;
@@ -322,9 +348,113 @@ let create_named_type_structs (TA.TypeDec { name_sym; constrs }) =
     in
     List.iter2 create_constr_named_struct_type constrs constr_lltypes
   
+  and build_equality_fun () =
+    (* store previous_block in order to return in the end *)
+    let previous_block = builder |> L.insertion_block in
+
+    (* declare function *)
+    let userdef_struct_pointer = userdef_ty |> lltype_of_ty in
+    let func_lltype = L.function_type bool_type [| userdef_struct_pointer; userdef_struct_pointer |] in
+    let func_name = llname_equality_fun_of_userdef_ty userdef_ty in
+    let func = L.declare_function func_name func_lltype the_module in
+
+    (* create basic blocks entry, body, error, exit *)
+    let entry_block = L.append_block ctx "entry" func in
+    let body_block = L.append_block ctx "body" func in
+    let error_block = L.append_block ctx "error" func in
+    let exit_block = L.append_block ctx "exit" func in
+
+    (* take param structs *)
+    let s1 = L.param func 0 in
+    let s2 = L.param func 1 in
+    
+    (* fill entry block *)
+    L.position_at_end entry_block builder;
+
+    let get_tag_of_struct s =  
+      let tag_addr = L.build_struct_gep s 0 "tag_addr" builder in
+      L.build_load tag_addr "tag_load" builder
+    in
+    (* check whether tags are equal *)
+    let s1_tag = get_tag_of_struct s1 in
+    let s2_tag = get_tag_of_struct s2 in
+    let same_tag_cond = L.build_icmp L.Icmp.Eq s1_tag s2_tag "same_tag_comp" builder in
+    let entry_phi_pair = (const_bool false, entry_block) in
+    ignore(L.build_cond_br same_tag_cond body_block exit_block builder);
+
+    (* fill body block *)
+    L.position_at_end body_block builder;
+    (* create switch on tag value with default block the error block 
+       and add a case for every constructor in the current type *)
+    let switch = L.build_switch s1_tag error_block (List.length constrs) builder in
+    
+    (* create case and basic_block for every constructor and fill it's basic block *)
+    let add_constr_to_switch (TA.Constr { ty; name_sym; index }) =
+      let constr_name = llname_constr_of_constr_info name_sym userdef_ty in
+      let constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl constr_name with
+        | Some (_, lltype) -> lltype
+        | None -> internal_error None "Constructor %s not yet defined in add_constr_to_switch" constr_name
+      in
+
+      (* create case block and add switch case *)
+      let case_block = L.insert_block ctx ("case_" ^ constr_name) error_block in
+      L.add_case switch (const_int index) case_block;
+      
+      (* fill case block *)
+      L.position_at_end case_block builder;
+      
+      (* cast structs to current constructor *)
+      let s1_constr_struct = L.build_pointercast s1 constr_struct_pointer_lltype "s1_constr_type_cast" builder in
+      let s2_constr_struct = L.build_pointercast s2 constr_struct_pointer_lltype "s2_constr_type_cast" builder in
+      
+      (* take list of constr_param Types.tys *)
+      let constr_param_tys = match ty with
+        | T.CONSTR (param_tys, _, _) -> param_tys
+        | _ as other_ty -> internal_error None "Constructor %s with invalid type: %s" constr_name (T.ty_to_string other_ty)
+      in
+      (* create list_pairs with constr_params_llvalues *)
+      let load_from_constr_struct s idx =
+        let addr = L.build_struct_gep s idx "temp_constr_param_load_addr" builder in
+        L.build_load addr "temp_constr_param_load" builder
+      in
+      let create_pair idx = load_from_constr_struct s1_constr_struct idx, load_from_constr_struct s2_constr_struct idx in
+      let s1_s2_constr_param_pairs = List.mapi (fun i _ -> create_pair (i + 1)) constr_param_tys in
+       
+      (* create and of all constructor param comps *)
+      let create_and prev_and param_ty (s1_constr_param, s2_constr_param) =
+        let curr_cond = build_equality_check true s1_constr_param s2_constr_param param_ty in
+        L.build_and prev_and curr_cond "temp_constr_param_and" builder
+      in
+      
+      (* create equality value and branch to exit block *)
+      let eq_cond = List.fold_left2 create_and (const_bool true) constr_param_tys s1_s2_constr_param_pairs in
+      ignore(L.build_br exit_block builder);
+
+      (* return phi pair to be used in exit block *)
+      eq_cond, case_block
+    
+    in
+    (* add all cases and blocks *)
+    let case_phi_pairs = List.map add_constr_to_switch constrs in
+
+    (* fill error block *)
+    L.position_at_end error_block builder;
+    build_runtime_error ("Invalid constructor of type " ^ (S.name name_sym) ^ " encountered in comparison operation");
+    ignore(L.build_br error_block builder);
+
+    (* fill exit block *)
+    L.position_at_end exit_block builder;
+    let phi_pairs = entry_phi_pair :: case_phi_pairs in
+    let phi = L.build_phi phi_pairs "temp_phi" builder in
+    ignore(L.build_ret phi builder);
+
+    (* restore builder *)
+    L.position_at_end previous_block builder;
   in
+
   create_userdef_named_struct_type ();
-  create_constr_named_struct_types ()
+  create_constr_named_struct_types ();
+  build_equality_fun ()
 
 let declare_external_functions (external_functions: (string * T.ty) list list) =
   let rec declare_from_list = function
@@ -352,23 +482,24 @@ let build_unary_operator name_sym param_exprs generate_ir_fun =
 
 let build_binary_operator_enhanced_funs () =
   let build_division_fun name_sym elem_type ll_cmp_fun ll_div_fun = 
+    (* store previous_block in order to return in the end *)
+    let previous_block = builder |> L.insertion_block in
+
+    (* decalre function *)
     let func_lltype = L.function_type elem_type [| elem_type; elem_type |] in
     let func = L.declare_function (S.name name_sym) func_lltype the_module in
-    L.set_gc (Some "ocaml") func;
 
     (* create basic_blocks entry, runtime_error, non_runtime_error *)
     let entry_block = L.append_block ctx "entry" func in
     let error_block = L.append_block ctx "runtime_error" func in
     let body_block = L.append_block ctx "body" func in
     
-    (* create different builder *)
-    let builder = L.builder_at_end ctx entry_block in
-    
     (* take params *)
     let param1 = L.param func 0 in
     let param2 = L.param func 1 in
 
     (* fill entry_block *)
+    L.position_at_end entry_block builder;
     let cond = ll_cmp_fun param2 "denom_zero_comp" builder in
     ignore(L.build_cond_br cond error_block body_block builder);
 
@@ -380,7 +511,10 @@ let build_binary_operator_enhanced_funs () =
     (* fill non_runtime_error block *)
     L.position_at_end body_block builder;
     let ret = ll_div_fun param1 param2 "division" builder in
-    ignore(L.build_ret ret builder)
+    ignore(L.build_ret ret builder);
+
+    (* restore builder *)
+    L.position_at_end previous_block builder;
   in
 
   build_division_fun ("_binary_int_division", 0) int_type (L.build_icmp L.Icmp.Eq (const_int 0)) L.build_sdiv;
@@ -404,7 +538,7 @@ let build_binary_operator name_sym param_exprs generate_ir_fun =
     | t when t = float_type -> L.build_fcmp ftp p1_ll
     | _ -> internal_error None "invalid type provided to int_char_float_cmp"
   in
-  let build_short_circuited_logical_oper short_llvalue ll_lgc_fun =
+  let build_short_circuited_logical_oper ll_lgc_fun short_llvalue p1_ll gen_p2 =
     (* create basic_blocks logical_non_short_circuit, logical_continue *)
     let current_block = builder |> L.insertion_block in
     let function_block = current_block |> L.block_parent in
@@ -451,17 +585,20 @@ let build_binary_operator name_sym param_exprs generate_ir_fun =
       let p2_ll = gen_p2 () in
       L.build_fmul p1_ll p2_ll "binary_float_mul" builder
     | "( /. )" -> 
-      let p2_ll = gen_p2 ()
-      in call_after_lookup "_binary_float_division" [| p1_ll; p2_ll |] "binary_float_division"
+      let p2_ll = gen_p2 () in
+      call_after_lookup "_binary_float_division" [| p1_ll; p2_ll |] "binary_float_division"
     | "( mod )" -> 
       let p2_ll = gen_p2 () in 
       L.build_srem p1_ll p2_ll "binary_int_mod" builder
     | "( ** )" -> 
       failwith "TODO binary_float_pow"
     | "( = )" -> 
-      failwith "TODO binary_struct_equal"
+      let p2_ll = gen_p2 () in
+      build_equality_check true p1_ll p2_ll (TA.expr_ty p2_expr)
     | "( <> )" -> 
-      failwith "TODO binary_struct_unequal"
+      let p2_ll = gen_p2 () in
+      let eq = build_equality_check true p1_ll p2_ll (TA.expr_ty p2_expr) in
+      L.build_not eq "binary_struct_unequality" builder
     | "( < )" -> 
       let p2_ll = gen_p2 () in 
       int_char_float_cmp (L.Icmp.Slt, L.Fcmp.Olt) p1_ll p2_ll "binary_lt" builder
@@ -475,13 +612,16 @@ let build_binary_operator name_sym param_exprs generate_ir_fun =
       let p2_ll = gen_p2 () in
       int_char_float_cmp (L.Icmp.Sge, L.Fcmp.Oge) p1_ll p2_ll "binary_geq" builder
     | "( == )" -> 
-      failwith "TODO binary_nat_equal"
+      let p2_ll = gen_p2 () in
+      build_equality_check false p1_ll p2_ll (TA.expr_ty p2_expr)
     | "( != )" -> 
-      failwith "TODO binary_nat_unequal"
+      let p2_ll = gen_p2 () in
+      let eq = build_equality_check false p1_ll p2_ll (TA.expr_ty p2_expr) in
+      L.build_not eq "binary_nat_unequality" builder
     | "( && )" -> 
-      build_short_circuited_logical_oper (const_bool false) L.build_and
+      build_short_circuited_logical_oper L.build_and (const_bool false) p1_ll gen_p2
     | "( || )" -> 
-      build_short_circuited_logical_oper (const_bool true) L.build_or
+      build_short_circuited_logical_oper L.build_or (const_bool true) p1_ll gen_p2
     | "( ; )" ->
       gen_p2 ()
     | "( := )" -> 
@@ -523,7 +663,7 @@ and generate_ir_def depth info_tbl = function
       constrs |> List.hd |> userdef_ty_of_constr |> lltype_of_ty |> ignore
     in
     List.iter ensure_declared_userdef_type tdecs; (* decalare non-yet-declared custom types *)
-    List.iter create_named_type_structs tdecs (* create struct types for opaque declared userdef type and constructor types *)
+    List.iter create_named_type_structs_and_equality_fun tdecs (* create struct types for opaque declared userdef type and constructor types *)
 
 and generate_ir_dec depth info_tbl = function
   | TA.ConstVarDec { ty; name_sym; value } ->
@@ -665,7 +805,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let userdef_struct_pointer_lltype = lltype_of_ty ty in
     let userdef_struct_lltype = L.element_type userdef_struct_pointer_lltype in
     print_lltype ("userdef struct type:") userdef_struct_lltype;
-    let llname = llname_of_constr_info name_sym ty in
+    let llname = llname_constr_of_constr_info name_sym ty in
     let tag, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
       | Some (tag, lltype) -> tag, lltype
       | None -> internal_error_of_msg_format (Some loc) "Some (tag, lltype)" "None" "constr_info_tbl" "pair"
@@ -876,7 +1016,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     const_bool true
 
   and generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block (TA.CP_BASIC { ty; constr_sym; base_patterns; loc }) =
-    let llname = llname_of_constr_info constr_sym ty in
+    let llname = llname_constr_of_constr_info constr_sym ty in
     let tag, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
       | Some (tag, lltype) -> tag, lltype
       | None -> internal_error_of_msg_format (Some loc) "Some (tag, lltype)" "None" "constr_info_tbl" "pair"
