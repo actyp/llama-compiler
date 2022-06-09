@@ -341,7 +341,7 @@ and build_func_return ret_llvalue =
   ignore(L.build_ret ret_llvalue builder);
   ignore(function_frames_pop ())
 
-and build_array_struct name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt array_ptr_opt dims_len_llvalues =
+and build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt array_ptr_opt dims_len_llvalues =
   let store_to_struct ll_struct index value =
     let ptr = L.build_struct_gep ll_struct index "temp_struct_store_ptr" builder in
     print_llvalue "ptr" ptr;
@@ -390,7 +390,7 @@ and build_array_struct name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt ar
   (* get or build struct *)
   let struct_ptr = match struct_ptr_opt with
     | Some ptr -> ptr
-    | None -> build_alloca_end_of_entry_block struct_llty name None
+    | None -> build_alloca_end_of_entry_block struct_llty struct_ptr_name None
   in
   (* store struct in possible provided struct_ptr_ptr *)
   let _ = match struct_ptr_ptr_opt with
@@ -730,9 +730,10 @@ and generate_ir_dec depth info_tbl = function
          llvalue found above, here is the array_ptr *)
       let struct_ptr_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
       let struct_ptr_llty = lltype_of_ty ty in
+      let struct_ptr_name = (S.name name_sym) ^ "_alloca_ptr" in
       let str_size_with_zeros = String.length value + 1 in
       let array_size = const_int str_size_with_zeros in
-      ignore(build_array_struct (S.name name_sym) struct_ptr_llty (Some struct_ptr_ptr) None (Some llvalue) [array_size])
+      ignore(build_array_struct struct_ptr_name struct_ptr_llty (Some struct_ptr_ptr) None (Some llvalue) [array_size])
     | _ ->
       let llvalue_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
       ignore(L.build_store llvalue llvalue_ptr builder)
@@ -751,8 +752,9 @@ and generate_ir_dec depth info_tbl = function
   | TA.ArrayDec { ty; name_sym; dims_len_exprs } ->
     let struct_ptr_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
     let struct_ptr_llty = (lltype_of_ty ty) in
+    let struct_ptr_name = (S.name name_sym) ^ "_alloca_ptr" in
     let dims_len_llvalues = List.map (generate_ir_expr depth info_tbl) dims_len_exprs in
-    ignore(build_array_struct (S.name name_sym) struct_ptr_llty (Some struct_ptr_ptr) None None dims_len_llvalues)
+    ignore(build_array_struct struct_ptr_name struct_ptr_llty (Some struct_ptr_ptr) None None dims_len_llvalues)
     
 and generate_ir_param func_name_sym info_tbl depth param_index (Param { name_sym }) =
   let func = find_function_in_module (S.name func_name_sym) in
@@ -784,7 +786,8 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let array_success_block = L.append_block ctx "array_ref_bound_check_success" function_block in
 
     (* get array_struct_ptr and generate dim expressions *)
-    let struct_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let struct_ptr_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let struct_ptr = L.build_load struct_ptr_ptr "array_struct_alloca_ptr_load" builder in
     let exprs_ll = List.map generate_ir_expr_aux exprs in
     
     (* bound check *)
@@ -825,14 +828,18 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let first_exprs_ll, last_expr_ll = split_last_elem [] exprs_ll in
     let first_dim_sizes, _ = split_last_elem [] dim_sizes_ll in
     let array_index = List.fold_left2 add_dim_offset last_expr_ll first_exprs_ll first_dim_sizes in
+    
     (* return requested array element pointer -- done with gep *)
     let array_ptr = load_from_array_struct 0 in
     L.build_gep array_ptr [| array_index |] "temp_array_element_gep" builder
   | TA.E_ArrayDim { dim; name_sym } ->
     (* bound check if 1 <= dim <= dimNum *)
-    let struct_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let struct_ptr_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let struct_ptr = L.build_load struct_ptr_ptr "array_struct_alloca_ptr_load" builder in
+
     (* remove first element which is array pointer *)
     let dimNum = struct_ptr |> L.type_of |> L.struct_element_types |> Array.length |> fun d -> d - 1 in
+
     if dim < 1 || dim > dimNum
       then begin
         build_runtime_error "Out of bounds error in array dim call";
