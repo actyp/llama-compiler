@@ -160,6 +160,84 @@ and declare_function name_sym func_ty =
   let func = L.declare_function (S.name name_sym) func_type the_module in
   func
 
+and build_utility_funs () =
+  let build_runtime_error_fun () =
+    (* declare function *)
+    let func_name = "_runtime_error" in
+    let func_lltype = L.function_type unit_type [| L.pointer_type char_type; int_type |] in
+    let func = L.declare_function func_name func_lltype the_module in
+
+    (* create basic_blocks entry, body *)
+    let entry_block = L.append_block ctx "entry" func in
+    let body_block = L.append_block ctx "body" func in
+
+    (* take params *)
+    let array_ptr = L.param func 0 in
+    let array_size = L.param func 1 in
+
+    (* fill entry_block *)
+    L.position_at_end entry_block builder;
+    ignore(L.build_br body_block builder);
+
+    (* fill body_block *)
+    L.position_at_end body_block builder;
+
+    (* build array struct *)
+    let struct_ptr_llty = lltype_of_ty Env.array_of_char_ty in
+    let struct_ptr = build_array_struct "runtime_error_array_struct" struct_ptr_llty None None (Some array_ptr) [array_size] in
+    
+    (* build error code *)
+    let error_code = const_int 1 in
+
+    (* find and call external function 'lla_exit_with_error_call' *)
+    let func = find_function_in_module "lla_exit_with_error" in
+    let ret = L.build_call func [| struct_ptr; error_code |] "lla_exit_with_error_call" builder in
+    ignore(L.build_ret ret builder);
+  in
+  let build_division_fun name_sym elem_type ll_cmp_fun ll_div_fun = 
+    (* declare function *)
+    let func_lltype = L.function_type elem_type [| elem_type; elem_type |] in
+    let func = L.declare_function (S.name name_sym) func_lltype the_module in
+
+    (* create basic_blocks entry, runtime_error, body *)
+    let entry_block = L.append_block ctx "entry" func in
+    let error_block = L.append_block ctx "runtime_error" func in
+    let body_block = L.append_block ctx "body" func in
+    
+    (* take params *)
+    let param1 = L.param func 0 in
+    let param2 = L.param func 1 in
+
+    (* fill entry_block *)
+    L.position_at_end entry_block builder;
+    let cond = ll_cmp_fun param2 "denom_zero_comp" builder in
+    ignore(L.build_cond_br cond error_block body_block builder);
+
+    (* fill runtime_error block *)
+    L.position_at_end error_block builder;
+    build_runtime_error "Division by zero";
+    ignore(L.build_br error_block builder);
+
+    (* fill body block *)
+    L.position_at_end body_block builder;
+    let ret = ll_div_fun param1 param2 "division" builder in
+    ignore(L.build_ret ret builder);
+  in
+  build_runtime_error_fun ();
+  build_division_fun ("_binary_int_division", 0) int_type (L.build_icmp L.Icmp.Eq (const_int 0)) L.build_sdiv;
+  build_division_fun ("_binary_float_division", 0)  float_type (L.build_fcmp L.Fcmp.Oeq (const_float 0.0)) L.build_fdiv
+
+and build_runtime_error msg =
+  (* get or build error char array *)
+  let error_str = "Runtime Error: " ^ msg ^ "\n" in
+  let str_size_with_zeros = String.length error_str + 1 in
+  let array_ptr = get_or_build_global_string_pointer error_str in
+  let array_size = const_int str_size_with_zeros in
+
+  (* find and call util function '_runtime_error' *)
+  let func = find_function_in_module "_runtime_error" in
+  ignore(L.build_call func [| array_ptr; array_size |] "_runtime_error_call" builder)
+
 and find_function_in_module name =
   (* add 'lla_' prefix in case of external function *)
   let func_name = if is_external_function name then "lla_" ^ name else name in
@@ -323,30 +401,6 @@ and build_array_struct name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt ar
   List.iteri (fun i llv -> store_to_struct struct_ptr i llv) (array_ptr :: dims_len_llvalues);
   struct_ptr
 
-and build_runtime_error msg =
-  (* get or build error char array *)
-  let error_str = "Runtime Error: " ^ msg ^ "\n" in
-  let str_size_with_zeros = String.length error_str + 1 in
-  let array_ptr = get_or_build_global_string_pointer error_str in
-  let array_size = const_int str_size_with_zeros in
-
-  (* find and call util function '_runtime_error' *)
-  let func = find_function_in_module "_runtime_error" in
-  ignore(L.build_call func [| array_ptr; array_size |] "_runtime_error_call" builder)
-
-  (*
-  (* build array struct *)
-  let struct_ptr_llty = lltype_of_ty (T.ARRAY (1, T.CHAR)) in
-  let struct_ptr = build_array_struct "runtime_error_array_struct" struct_ptr_llty None None (Some array_ptr) dims_len_llvalues in
-  
-  (* build error code *)
-  let error_code = const_int 1 in
-
-  (* find and call external function 'lla_exit_with_error_call' *)
-  let func = find_function_in_module "lla_exit_with_error" in
-  ignore(L.build_call func [| struct_ptr; error_code |] "lla_exit_with_error_call" builder)
-  *)
-
 and build_equality_check is_struct p1_ll p2_ll = function
   | T.UNIT -> 
     const_bool true
@@ -386,87 +440,7 @@ and build_unary_operator name_sym param_exprs generate_ir_fun =
     | "( ! )" -> L.build_load param_ll "unary_ref" builder
     | "( not )" -> L.build_not param_ll "unary_not" builder
     | _ -> internal_error None "unsupported unary operator: %s" op_name
-
-and build_utility_funs () =
-  let build_runtime_error_fun () =
-    (*(* store previous_block in order to return in the end *)
-    let previous_block = builder |> L.insertion_block in*)
-
-    (* declare function *)
-    let func_name = "_runtime_error" in
-    let func_lltype = L.function_type unit_type [| L.pointer_type char_type; int_type |] in
-    let func = L.declare_function func_name func_lltype the_module in
-
-    (* create basic_blocks entry, body *)
-    let entry_block = L.append_block ctx "entry" func in
-    let body_block = L.append_block ctx "body" func in
-
-    (* take params *)
-    let array_ptr = L.param func 0 in
-    let array_size = L.param func 1 in
-
-    (* fill entry_block *)
-    L.position_at_end entry_block builder;
-    ignore(L.build_br body_block builder);
-
-    (* fill body_block *)
-    L.position_at_end body_block builder;
-
-    (* build array struct *)
-    let struct_ptr_llty = lltype_of_ty Env.array_of_char_ty in
-    let struct_ptr = build_array_struct "runtime_error_array_struct" struct_ptr_llty None None (Some array_ptr) [array_size] in
-    
-    (* build error code *)
-    let error_code = const_int 1 in
-
-    (* find and call external function 'lla_exit_with_error_call' *)
-    let func = find_function_in_module "lla_exit_with_error" in
-    let ret = L.build_call func [| struct_ptr; error_code |] "lla_exit_with_error_call" builder in
-    ignore(L.build_ret ret builder);
-
-    (*(* restore builder *)
-    L.position_at_end previous_block builder*)
-  in
-  let build_division_fun name_sym elem_type ll_cmp_fun ll_div_fun = 
-    (*(* store previous_block in order to return in the end *)
-    let previous_block = builder |> L.insertion_block in *)
-
-    (* declare function *)
-    let func_lltype = L.function_type elem_type [| elem_type; elem_type |] in
-    let func = L.declare_function (S.name name_sym) func_lltype the_module in
-
-    (* create basic_blocks entry, runtime_error, body *)
-    let entry_block = L.append_block ctx "entry" func in
-    let error_block = L.append_block ctx "runtime_error" func in
-    let body_block = L.append_block ctx "body" func in
-    
-    (* take params *)
-    let param1 = L.param func 0 in
-    let param2 = L.param func 1 in
-
-    (* fill entry_block *)
-    L.position_at_end entry_block builder;
-    let cond = ll_cmp_fun param2 "denom_zero_comp" builder in
-    ignore(L.build_cond_br cond error_block body_block builder);
-
-    (* fill runtime_error block *)
-    L.position_at_end error_block builder;
-    build_runtime_error "Division by zero";
-    ignore(L.build_br error_block builder);
-
-    (* fill body block *)
-    L.position_at_end body_block builder;
-    let ret = ll_div_fun param1 param2 "division" builder in
-    ignore(L.build_ret ret builder);
-
-    (*(* restore builder *)
-    L.position_at_end previous_block builder *)
-  in
-  build_runtime_error_fun ();
-  build_division_fun ("_binary_int_division", 0) int_type (L.build_icmp L.Icmp.Eq (const_int 0)) L.build_sdiv;
-  build_division_fun ("_binary_float_division", 0)  float_type (L.build_fcmp L.Fcmp.Oeq (const_float 0.0)) L.build_fdiv
   
-
 and build_binary_operator name_sym param_exprs generate_ir_fun =
   let op_name = S.name name_sym in
   (* param2 to be generated on need, in order to support short-circuit behavior *)
