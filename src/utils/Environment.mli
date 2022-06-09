@@ -1,6 +1,9 @@
 module S = Symbol
 module T = Types
 
+(** [array_of_char_ty] is the equivalent of 'array of char' with Types.ty *)
+val array_of_char_ty : T.ty
+
 (** [unary_operator_names] is the list of names of unary operators *)
 val unary_operator_names : string list
 
@@ -9,6 +12,9 @@ val binary_operator_names : string list
 
 (** [external_functions] is the list of lists of string, ty pairs of external functions *)
 val external_functions : (string * T.ty) list list 
+
+(** [external_function_names] is the list of names of external functions*)
+val external_function_names : string list
 
 (** [initial_envs ()] returns the initial (venv, tenv) tuple *)
 val initial_envs : unit -> T.ty_symboltable * T.ty_symboltable

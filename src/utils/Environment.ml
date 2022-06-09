@@ -4,8 +4,7 @@ module T = Types
 (** [fun_ty param_tys ret_ty] creates a Types.FUNC from [param_tys] and [ret_ty] *)
 let fun_ty (param_tys: T.ty list) (ret_ty: T.ty): T.ty = T.FUNC (param_tys, ret_ty)
 
-(** [string_ty ()] returns the equivalent array of char from Types *)
-let string_ty () = T.ARRAY (1, T.CHAR)
+let array_of_char_ty = T.ARRAY (1, T.CHAR)
 
 (** [unary_operator_functions] is a list of pairs of unary operators and their types *)
 let unary_operator_functions =
@@ -52,12 +51,12 @@ let io_functions =
     ("print_bool"  , fun_ty [T.BOOL] T.UNIT);
     ("print_char"  , fun_ty [T.CHAR] T.UNIT);
     ("print_float" , fun_ty [T.FLOAT] T.UNIT);
-    ("print_string", fun_ty [string_ty ()] T.UNIT);
+    ("print_string", fun_ty [array_of_char_ty] T.UNIT);
     ("read_int"    , fun_ty [T.UNIT] T.INT);
     ("read_bool"   , fun_ty [T.UNIT] T.BOOL);
     ("read_char"   , fun_ty [T.UNIT] T.CHAR);
     ("read_float"  , fun_ty [T.UNIT] T.FLOAT);
-    ("read_string" , fun_ty [T.UNIT] (string_ty ()));
+    ("read_string" , fun_ty [array_of_char_ty] T.UNIT);
   ]
 
 (** [mathematical_functions] is a list of pairs of mathematical functions and their types *)
@@ -96,30 +95,39 @@ let conversion_functions =
 (** [string_management_functions] is a list of pairs of string management functions and their types *)
 let string_management_functions =
   [
-    ("strlen", fun_ty [string_ty ()] T.INT);
-    ("strcmp", fun_ty [string_ty (); string_ty ()] T.INT);
-    ("strcpy", fun_ty [string_ty (); string_ty ()] T.UNIT);
-    ("strcat", fun_ty [string_ty (); string_ty ()] T.UNIT);
+    ("strlen", fun_ty [array_of_char_ty] T.INT);
+    ("strcmp", fun_ty [array_of_char_ty; array_of_char_ty] T.INT);
+    ("strcpy", fun_ty [array_of_char_ty; array_of_char_ty] T.UNIT);
+    ("strcat", fun_ty [array_of_char_ty; array_of_char_ty] T.UNIT);
+  ]
+
+(** [inner_util_functions] is a list of pairs of util functions and their types.
+    These functions are external, but not exposed to the user, they are used internally *)
+let inner_util_functions = 
+  [
+    ("pow" , fun_ty [T.FLOAT; T.FLOAT] T.FLOAT);
+    ("exit_with_error", fun_ty [array_of_char_ty; T.INT] T.UNIT);
   ]
 
 (** [function_names func_list] returns a list containing only the names of the [func_list] *)
 let function_names func_list = List.map (fun (name, _) -> name) func_list
-
-(** [augment_env env l] returns the augmented environment from initial [env] and list of pairs [l] *)
-let rec augment_env env = function
-  | [] -> env
-  | (s, ty) :: rest -> augment_env (S.enter env (S.symbol s) ty) rest
 
 let unary_operator_names = function_names unary_operator_functions
 
 let binary_operator_names = function_names binary_operator_functions
 
 let external_functions = [
-  io_functions; mathematical_functions; increment_functions;
-  conversion_functions; string_management_functions
+  io_functions; mathematical_functions; increment_functions; conversion_functions;
+  string_management_functions; inner_util_functions
 ]
 
+let external_function_names = external_functions |> List.flatten |> function_names
+  
 let initial_envs () =
+  let rec augment_env env = function
+    | [] -> env
+    | (s, ty) :: rest -> augment_env (S.enter env (S.symbol s) ty) rest
+  in
   let venv_pairs = [
     unary_operator_functions; binary_operator_functions; io_functions;
     mathematical_functions; increment_functions; conversion_functions;
