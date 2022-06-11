@@ -4,6 +4,8 @@ module H = Hashtbl
 module L = Llvm
 module LAN = Llvm_analysis
 module LBE = Llvm_all_backends
+module LIP = Llvm_ipo
+module LSO = Llvm_scalar_opts
 module LTG = Llvm_target
 module S = Symbol
 module T = Types
@@ -45,6 +47,24 @@ let ll_target_triple = LTG.Target.default_triple ()
 let ll_target = LTG.Target.by_triple ll_target_triple
 let ll_machine = LTG.TargetMachine.create ~triple:ll_target_triple ll_target
 let ll_data_layout = Llvm_target.TargetMachine.data_layout ll_machine
+let ll_opt_funs = [
+  (* IPO Transforms *)
+  LIP.add_argument_promotion; LIP.add_constant_merge; LIP.add_merge_functions; LIP.add_dead_arg_elimination;
+  LIP.add_function_attrs; LIP.add_function_inlining; LIP.add_always_inliner; LIP.add_global_dce;
+  LIP.add_global_optimizer; LIP.add_prune_eh; LIP.add_ipsccp; LIP.add_strip_dead_prototypes; LIP.add_strip_symbols; 
+
+  (* Scalar Transforms *)
+  LSO.add_aggressive_dce; LSO.add_alignment_from_assumptions; LSO.add_cfg_simplification; LSO.add_dead_store_elimination;
+  LSO.add_scalarizer; LSO.add_merged_load_store_motion; LSO.add_gvn; LSO.add_ind_var_simplification;
+  LSO.add_instruction_combination; LSO.add_jump_threading; LSO.add_licm; LSO.add_loop_deletion; LSO.add_loop_idiom;
+  LSO.add_loop_rotation; LSO.add_loop_reroll; LSO.add_loop_unroll; LSO.add_loop_unswitch; LSO.add_memcpy_opt;
+  LSO.add_partially_inline_lib_calls; LSO.add_lower_atomic; LSO.add_lower_switch; LSO.add_memory_to_register_promotion;
+  LSO.add_reassociation; LSO.add_sccp; LSO.add_scalar_repl_aggregation; LSO.add_scalar_repl_aggregation_ssa;
+  LSO.add_lib_call_simplification; LSO.add_tail_call_elimination; LSO.add_memory_to_register_demotion;
+  LSO.add_verifier; LSO.add_correlated_value_propagation; LSO.add_early_cse; LSO.add_lower_expect_intrinsic;
+  LSO.add_lower_constant_intrinsics; LSO.add_type_based_alias_analysis; LSO.add_scoped_no_alias_alias_analysis;
+  LSO.add_basic_alias_analysis; LSO.add_unify_function_exit_nodes
+]
 
 let ctx = L.global_context ()
 let the_module = L.create_module ctx "llama"
@@ -692,6 +712,15 @@ let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: Esc.info_tbl_t): L.ll
   
   build_func_return (const_int 0);
 
+  (* check for optimizations *)
+  let _ = if opt then begin
+    let pm = L.PassManager.create () in
+    List.iter (fun opt_f -> opt_f pm) ll_opt_funs;
+    ignore(L.PassManager.run_module the_module pm);
+  end
+  in
+  
+  (* verify and return module *)
   match LAN.verify_module the_module with
   | None -> the_module
   | Some reason -> pprint the_module; internal_error None "Verification error: %s" reason
