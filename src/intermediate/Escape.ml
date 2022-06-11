@@ -20,9 +20,9 @@ let pp_llvalue_opt ppf = function
 
 (** [info] type used in final hashtbl *)
 type info =
-  | LocalVarInfo of { dec_depth: int; func_sym: S.symbol; llvalue_opt: L.llvalue option [@printer pp_llvalue_opt] } 
-  | EscVarInfo of { dec_depth: int; func_sym: S.symbol; frame_offset: int }
-  | FuncInfo of { dec_depth: int; local_list: (S.symbol * T.ty) list; esc_list: (S.symbol * T.ty) list }
+  | LocalVarInfo of { name_sym: S.symbol; ty: T.ty; dec_depth: int; func_sym: S.symbol; llvalue_opt: L.llvalue option [@printer pp_llvalue_opt] } 
+  | EscVarInfo of { name_sym: S.symbol; ty: T.ty; dec_depth: int; func_sym: S.symbol; frame_offset: int }
+  | FuncInfo of { name_sym: S.symbol; ty: T.ty; dec_depth: int; local_list: (S.symbol * T.ty) list; esc_list: (S.symbol * T.ty) list }
 [@@deriving show]
 
 (** [info_tbl_t] final hashtbl type *)
@@ -46,16 +46,16 @@ let pprint (tbl: info_tbl_t) =
     then Printf.printf "<Empty>\n" 
     else H.iter print_pair tbl
 
-(** [add_local_var_to_tbl tbl name_sym dec_depth func_sym] adds to [tbl] the mapping int
-    (of [name_sym]) -> LocalVarInfo {[dec_depth]; [func_sym]; llvalue_opt = None } *)
-let add_local_var_to_tbl (tbl: info_tbl_t) name_sym dec_depth func_sym =
-  let entry = LocalVarInfo { dec_depth; func_sym; llvalue_opt = None } in
+(** [add_local_var_to_tbl tbl name_sym ty dec_depth func_sym] adds to [tbl] the mapping int (of [name_sym])
+    -> LocalVarInfo { [name_sym]; [ty]; [dec_depth]; [func_sym]; llvalue_opt = None } *)
+let add_local_var_to_tbl (tbl: info_tbl_t) name_sym ty dec_depth func_sym =
+  let entry = LocalVarInfo { name_sym; ty; dec_depth; func_sym; llvalue_opt = None } in
   tbl_add tbl name_sym entry
 
-(** [add_fun_to_tbl tbl name_sym dec_depth local_list esc_list] adds to [tbl] the
-    mapping int (of [name_sym]) -> FuncInfo {[dec_depth]; [local_list]; [esc_list]} *)
-let add_fun_to_tbl (tbl: info_tbl_t) name_sym dec_depth local_list esc_list =
-  let entry = FuncInfo { dec_depth; local_list; esc_list } in
+(** [add_fun_to_tbl tbl name_sym ty dec_depth local_list esc_list] adds to [tbl] the mapping int (of [name_sym])
+    -> FuncInfo { [name_sym]; [ty]; [dec_depth]; [local_list]; [esc_list] } *)
+let add_fun_to_tbl (tbl: info_tbl_t) name_sym ty dec_depth local_list esc_list =
+  let entry = FuncInfo { name_sym; ty; dec_depth; local_list; esc_list } in
   tbl_add tbl name_sym entry
 
 (** [add_var_to_func_list tbl func_sym (name_sym, ty)] obtains the [FuncInfo] from [tbl]
@@ -63,22 +63,22 @@ let add_fun_to_tbl (tbl: info_tbl_t) name_sym dec_depth local_list esc_list =
 let add_var_to_func_list (tbl: info_tbl_t) func_sym (name_sym, ty) =
   let new_var = (name_sym, ty) in
   match tbl_find_opt tbl func_sym with
-  | Some FuncInfo { dec_depth; local_list; esc_list } ->
-    add_fun_to_tbl tbl func_sym dec_depth (new_var :: local_list) esc_list
-  | Some LocalVarInfo _ -> 
+  | Some FuncInfo ({ local_list } as info) ->
+    tbl_add tbl func_sym (FuncInfo { info with local_list = (new_var :: local_list) })
+  | Some LocalVarInfo _ ->
     internal_error "symbol %s with LocalVarInfo binding in add_var_to_func_list" (S.name name_sym)
-  | Some EscVarInfo _ -> 
+  | Some EscVarInfo _ ->
     internal_error "symbol %s with EscVarInfo binding in add_var_to_func_list" (S.name name_sym)
-  | None -> 
+  | None ->
     internal_error "unbound symbol %s in tbl in add_var_to_func_list" (S.name name_sym)
 
 (** [esc_var_of_local tbl name_sym use_depth] obtains the [LocalVarInfo] from [tbl]
     associated to [name_sym] in order to update it to [EscVarInfo] *)
 let esc_var_of_local (tbl: info_tbl_t) name_sym use_depth =
   match tbl_find_opt tbl name_sym with
-  | Some LocalVarInfo { dec_depth; func_sym } ->
+  | Some LocalVarInfo { name_sym; ty; dec_depth; func_sym } ->
     if dec_depth <> use_depth
-    then tbl_add tbl name_sym (EscVarInfo { dec_depth; func_sym; frame_offset = 0 })
+    then tbl_add tbl name_sym (EscVarInfo { name_sym; ty; dec_depth; func_sym; frame_offset = 0 })
   | Some EscVarInfo _ -> ()
   | Some FuncInfo _ -> () (* external function not in tbl *)
   | None -> () (* variable not in tbl *)
@@ -90,7 +90,7 @@ let esc_var_of_local (tbl: info_tbl_t) name_sym use_depth =
 let cleanup_func_dec (tbl: info_tbl_t) name_sym =
   let rec get_fun_info tbl name_sym =
     match tbl_find_opt tbl name_sym with
-    | Some FuncInfo { dec_depth; local_list } -> dec_depth, List.rev local_list
+    | Some FuncInfo { ty; dec_depth; local_list } -> ty, dec_depth, List.rev local_list
     | Some LocalVarInfo _ -> internal_error "symbol %s with LocalVarInfo binding in get_fun_info" (S.name name_sym)
     | Some EscVarInfo _ -> internal_error "symbol %s with EscVarInfo binding in get_fun_info" (S.name name_sym)
     | None -> internal_error "unbound symbol %s in tbl to get_fun_info" (S.name name_sym)
@@ -109,59 +109,102 @@ let cleanup_func_dec (tbl: info_tbl_t) name_sym =
       false
 
   in
-  let dec_depth, prev_local_list = get_fun_info tbl name_sym in
+  let ty, dec_depth, prev_local_list = get_fun_info tbl name_sym in
   let local_list, esc_list = List.partition (keep_var_in_local_list tbl) prev_local_list in
-  add_fun_to_tbl tbl name_sym dec_depth local_list esc_list
+  add_fun_to_tbl tbl name_sym ty dec_depth local_list esc_list
 
 let rec analyse (tast: TA.tast): info_tbl_t =
   let info_tbl: info_tbl_t = H.create 512 in
-  let init_depth = 0 and init_func_sym = ("entry_func", 0) in
+  let init_depth = 0 and init_func_sym = ("entry_func", 0) and init_func_ty = T.FUNC ([], T.INT) in
   (* create a single outer wrapper function 'entry_func', so that
      global variables can be escaping variables of 'entry_func' *)
-  add_fun_to_tbl info_tbl init_func_sym init_depth [] [];
+  add_fun_to_tbl info_tbl init_func_sym init_func_ty init_depth [] [];
   List.iter (analyse_def (init_depth + 1) init_func_sym info_tbl) tast;
   cleanup_func_dec info_tbl init_func_sym;
   info_tbl
-  (*temp_info_tbl_to_info_tbl info_tbl*)
 
 (** [analyse_def depth func_sym info_tbl d] traverses and analyses TypedAst.def [d] of
     function-depth [depth] in function with symbol [func_sym] in [info_tbl_t] [info_tbl] *)
 and analyse_def depth func_sym info_tbl = function
-  | TA.LetDefNonRec { decs } | TA.LetDefRec { decs } ->
-    List.iter (analyse_dec depth func_sym info_tbl) decs
-  | TypeDef { tdecs } -> ()
+  | TA.LetDefNonRec { decs } ->
+    List.iter (analyse_non_rec_dec depth func_sym info_tbl) decs
+  | TA.LetDefRec { decs } ->
+    let analyse_dec_headers, analyse_dec_bodies = analyse_rec_dec_funs depth func_sym info_tbl in
+    List.iter analyse_dec_headers decs;
+    List.iter analyse_dec_bodies decs
+  | TypeDef { tdecs } ->
+    ()
 
-(** [analyse_dec depth func_sym info_tbl d] traverses and analyses TypedAst.dec [d] of
+(** [analyse_non_rec_dec depth func_sym info_tbl d] traverses and analyses TypedAst.dec [d] of
     function-depth [depth] in function with symbol [func_sym] in [info_tbl_t] [info_tbl] *)
-and analyse_dec depth func_sym info_tbl = function
+and analyse_non_rec_dec depth func_sym info_tbl = function
   | TA.ConstVarDec { ty; name_sym; value } ->
-    analyse_expr depth func_sym info_tbl value;
     if depth <> 0 then begin
-    add_local_var_to_tbl info_tbl name_sym depth func_sym;
-    add_var_to_func_list info_tbl func_sym (name_sym, ty)
-    end
-  | TA.FunctionDec { name_sym; params; body } ->
-    add_fun_to_tbl info_tbl name_sym depth [] [];
+      add_local_var_to_tbl info_tbl name_sym ty depth func_sym;
+      add_var_to_func_list info_tbl func_sym (name_sym, ty)
+    end;
+    analyse_expr depth func_sym info_tbl value
+  | TA.FunctionDec { ty; name_sym; params; body } ->
+    add_fun_to_tbl info_tbl name_sym ty depth [] [];
     List.iter (analyse_param (depth + 1) name_sym info_tbl) params;
     analyse_expr (depth + 1) name_sym info_tbl body;
     cleanup_func_dec info_tbl name_sym
   | TA.MutVarDec { ty; name_sym } ->
     if depth <> 0 then begin
-      add_local_var_to_tbl info_tbl name_sym depth func_sym;
+      add_local_var_to_tbl info_tbl name_sym ty depth func_sym;
       add_var_to_func_list info_tbl func_sym (name_sym, ty)
     end
   | TA.ArrayDec { ty; name_sym; dims_len_exprs } ->
     if depth <> 0 then begin
-      add_local_var_to_tbl info_tbl name_sym depth func_sym;
+      add_local_var_to_tbl info_tbl name_sym ty depth func_sym;
       add_var_to_func_list info_tbl func_sym (name_sym, ty)
     end;
     List.iter (analyse_expr depth func_sym info_tbl) dims_len_exprs;
+
+(** [analyse_rec_dec_funs depth func_sym info_tbl] provides the functions needed, in order
+    to traverse recursive decs. First traverse only their headers and add them to [info_tbl]
+    and then their bodies. In short the [analyse_non_rec_dec] function is split in two,
+    [analyse_dec_headers] and [analyse_dec_bodies] *)
+and analyse_rec_dec_funs depth func_sym info_tbl =
+    let analyse_dec_headers = function
+      | TA.ConstVarDec { ty; name_sym } ->
+        if depth <> 0 then begin
+        add_local_var_to_tbl info_tbl name_sym ty depth func_sym;
+        add_var_to_func_list info_tbl func_sym (name_sym, ty)
+        end
+      | TA.FunctionDec { ty; name_sym } ->
+        add_fun_to_tbl info_tbl name_sym ty depth [] [];
+      | TA.MutVarDec { ty; name_sym } ->
+        if depth <> 0 then begin
+          add_local_var_to_tbl info_tbl name_sym ty depth func_sym;
+          add_var_to_func_list info_tbl func_sym (name_sym, ty)
+        end
+      | TA.ArrayDec { ty; name_sym } ->
+        if depth <> 0 then begin
+          add_local_var_to_tbl info_tbl name_sym ty depth func_sym;
+          add_var_to_func_list info_tbl func_sym (name_sym, ty)
+        end
+    
+    and analyse_dec_bodies = function
+    | TA.ConstVarDec { value } ->
+      analyse_expr depth func_sym info_tbl value
+    | TA.FunctionDec { name_sym; params; body } ->
+      List.iter (analyse_param (depth + 1) name_sym info_tbl) params;
+      analyse_expr (depth + 1) name_sym info_tbl body;
+      cleanup_func_dec info_tbl name_sym
+    | TA.MutVarDec _ ->
+      ()
+    | TA.ArrayDec { dims_len_exprs } ->
+      List.iter (analyse_expr depth func_sym info_tbl) dims_len_exprs
+    in
+
+    analyse_dec_headers, analyse_dec_bodies
 
 (** [analyse_param depth func_sym info_tbl p] traverses and analyses TypedAst.param [p] of
     function-depth [depth] in function with symbol [func_sym] in [info_tbl_t] [info_tbl] *)
 and analyse_param depth func_sym info_tbl = function
   | TA.Param { ty; name_sym } ->
-    add_local_var_to_tbl info_tbl name_sym depth func_sym;
+    add_local_var_to_tbl info_tbl name_sym ty depth func_sym;
     add_var_to_func_list info_tbl func_sym (name_sym, ty)
 
 (** [analyse_expr depth func_sym info_tbl expr] traverses and analyses TypedAst.expr [expr] of
@@ -172,11 +215,14 @@ and analyse_expr depth func_sym info_tbl expr =
       esc_var_of_local info_tbl name_sym depth
     | TA.E_Int _ | TA.E_Float _ | TA.E_Char _ -> ()
     | TA.E_String _ | TA.E_BOOL _ | TA.E_Unit _ -> ()
-    | TA.E_ArrayRef _ | TA.E_ArrayDim _ -> ()
+    | TA.E_ArrayRef { name_sym } | TA.E_ArrayDim { name_sym } ->
+      esc_var_of_local info_tbl name_sym depth
     | TA.E_New _ | TA.E_Delete _-> ()
-    | TA.E_FuncCall { param_exprs } ->
+    | TA.E_FuncCall { name_sym; param_exprs } ->
+      esc_var_of_local info_tbl name_sym depth;
       List.iter analyse_expr_aux param_exprs
-    | TA.E_ConstrCall { param_exprs } ->
+    | TA.E_ConstrCall { name_sym; param_exprs } ->
+      esc_var_of_local info_tbl name_sym depth;
       List.iter analyse_expr_aux param_exprs
     | TA.E_LetIn { letdef; in_expr } ->
       analyse_def depth func_sym info_tbl letdef;
@@ -189,7 +235,7 @@ and analyse_expr depth func_sym info_tbl expr =
       List.iter analyse_expr_aux [while_expr; do_expr]
     | TA.E_ForDoDone { count_var_sym; start_expr; end_expr; do_expr } ->
       if depth <> 0 then begin
-      add_local_var_to_tbl info_tbl count_var_sym depth func_sym;
+      add_local_var_to_tbl info_tbl count_var_sym (T.INT) depth func_sym;
       add_var_to_func_list info_tbl func_sym (count_var_sym, T.INT)
       end;
       List.iter analyse_expr_aux [start_expr; end_expr; do_expr]
@@ -209,7 +255,7 @@ and analyse_expr depth func_sym info_tbl expr =
     | TA.BP_INT _ | TA.BP_FLOAT _ | TA.BP_CHAR _ | TA.BP_BOOL _ -> ()
     | TA.BP_ID { ty; name_sym } ->
       if depth <> 0 then begin
-      add_local_var_to_tbl info_tbl name_sym depth func_sym;
+      add_local_var_to_tbl info_tbl name_sym ty depth func_sym;
       add_var_to_func_list info_tbl func_sym (name_sym, ty)
       end
 

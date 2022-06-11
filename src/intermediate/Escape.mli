@@ -8,9 +8,9 @@ module TA = TypedAst
     Note: llvalue_opt is None for all after the analysis and 
     will be filled dynamically on IRCodegen *)
 type info =
-  | LocalVarInfo of { dec_depth: int; func_sym: S.symbol; llvalue_opt: L.llvalue option } 
-  | EscVarInfo of { dec_depth: int; func_sym: S.symbol; frame_offset: int }
-  | FuncInfo of { dec_depth: int; local_list: (S.symbol * T.ty) list; esc_list: (S.symbol * T.ty) list }
+  | LocalVarInfo of { name_sym: S.symbol; ty: T.ty; dec_depth: int; func_sym: S.symbol; llvalue_opt: L.llvalue option } 
+  | EscVarInfo of { name_sym: S.symbol; ty: T.ty; dec_depth: int; func_sym: S.symbol; frame_offset: int }
+  | FuncInfo of { name_sym: S.symbol; ty: T.ty; dec_depth: int; local_list: (S.symbol * T.ty) list; esc_list: (S.symbol * T.ty) list }
 
 (** [info_tbl_t] type of hashtbl, mapping ints (obtained from symbols) to [info] *)
 type info_tbl_t = (int, info) H.t

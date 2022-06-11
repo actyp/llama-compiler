@@ -119,9 +119,10 @@ let rec lltype_of_ty: T.ty -> L.lltype = function
     let struct_elem_list = array_ptr :: (gen_int_type_list 0 []) in
     struct_type (Array.of_list struct_elem_list) |> L.pointer_type
   | T.FUNC (param_tys, ret_ty) ->
+    (* function type is a pointer to an llvm function type*)
     let param_lltypes = Array.of_list (List.map lltype_of_ty param_tys) in
     let ret_lltype = lltype_of_ty ret_ty in
-    L.function_type ret_lltype param_lltypes
+    L.function_type ret_lltype param_lltypes |> L.pointer_type
   | T.USERDEF (name_sym, occ_num) as ty -> 
     (* userdef type is pointer to a named struct, 'name:occ_num' = { int_tag; largest constructor type size } 
        (implementing tagged union), created elsewhere and only queried from here *)
@@ -147,14 +148,14 @@ and declare_external_functions () =
       ignore(declare_function (external_name, 0) ty); 
       declare_from_list rest 
   in
-List.iter declare_from_list Env.external_functions
+  List.iter declare_from_list Env.external_functions
 
 and declare_function name_sym func_ty =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "declare_function" (S.name name_sym)
   in
   let func_type = match func_ty with
-    | T.FUNC _ -> lltype_of_ty func_ty
+    | T.FUNC _ -> lltype_of_ty func_ty |> L.element_type
     | _ -> func_internal_error "Types.FUNC" "other type" name_sym
   in
   let func = L.declare_function (S.name name_sym) func_type the_module in
@@ -260,9 +261,7 @@ and build_func_frame_vars name_sym func_ty info_tbl =
     let parent_struct_ptr_type = if function_frames_is_empty () 
       then L.pointer_type bool_type 
       else L.type_of (function_frames_top ()) (* stored ptr is already a pointer*) in
-    print_lltype (S.name name_sym ^ " parent_struct_ptr") parent_struct_ptr_type;
     let frame_type = struct_type (Array.of_list (parent_struct_ptr_type :: esc_list_lltypes)) in
-    print_lltype "frame_type" frame_type;
     let frame_ptr = L.build_alloca frame_type (S.name name_sym ^ ":frame") builder in
     function_frames_push frame_ptr;
     frame_ptr
@@ -278,7 +277,6 @@ and build_func_frame_vars name_sym func_ty info_tbl =
     | (name_sym, ty) :: rest ->
       let name = S.name name_sym in
       let llvalue = L.build_alloca (lltype_of_ty ty) name builder in
-      print_llvalue "local_param" llvalue;
       add_llvalue_of_local_var name_sym llvalue;
       alloc_locals rest
   in
@@ -294,36 +292,44 @@ and build_func_frame_vars name_sym func_ty info_tbl =
   ignore(L.build_br body_block builder);
   ignore(L.position_at_end body_block builder)
 
-and find_llvalue_ptr_of_var name_sym current_depth info_tbl = 
-let func_internal_error expected found =
-  internal_error_of_msg_format None expected found "find_llvalue_ptr_of_var" (S.name name_sym)
-in
-let rec find_declaration_frame current_frame curr_depth dec_depth =
-  if curr_depth - dec_depth <= 0
-  then current_frame
-  else begin
-    let parent_frame_ptr = L.build_struct_gep current_frame 0 "parent_frame_ptr" builder in
-    let parent_frame = L.build_load parent_frame_ptr "parent_frame_temp_load" builder in
-    find_declaration_frame parent_frame (curr_depth - 1) dec_depth
-  end
-in
-match Esc.tbl_find_opt info_tbl name_sym with
-| None -> func_internal_error "var" "None"
-| Some Esc.FuncInfo _ -> func_internal_error "var" "FuncInfo"
-| Some Esc.LocalVarInfo { llvalue_opt } ->
-  (* assuming info_tbl is correct, a local is found only in local scope while parsing *)
-  begin match llvalue_opt with
-  | None -> func_internal_error "local" "None" (* should have been allocated on it's function entry block *)
-  | Some llvalue_ptr -> llvalue_ptr
-  end
-| Some Esc.EscVarInfo { dec_depth; frame_offset } ->
-  let name = S.name name_sym in
-  let current_frame = function_frames_top () in
-  let declaration_frame = find_declaration_frame current_frame current_depth dec_depth in
-  print_llvalue "declaration_frame" declaration_frame;
-  let load_ptr = L.build_struct_gep declaration_frame (1 + frame_offset) (name ^ ":temp_gep") builder in
-  print_llvalue "load_ptr" load_ptr;
-  load_ptr
+and find_llvalue_ptr name_sym current_depth info_tbl on_call = 
+  let func_internal_error expected found =
+    internal_error_of_msg_format None expected found "find_llvalue_ptr" (S.name name_sym)
+  in
+  let rec find_declaration_frame current_frame curr_depth dec_depth =
+    if curr_depth - dec_depth <= 0
+    then current_frame
+    else begin
+      let parent_frame_ptr = L.build_struct_gep current_frame 0 "parent_frame_ptr" builder in
+      let parent_frame = L.build_load parent_frame_ptr "parent_frame_temp_load" builder in
+      find_declaration_frame parent_frame (curr_depth - 1) dec_depth
+    end
+  in
+  match Esc.tbl_find_opt info_tbl name_sym with
+  | None -> func_internal_error "var" "None"
+  | Some Esc.FuncInfo _ ->
+    find_function_in_module (S.name name_sym)
+    (*(* Higher-order functions are allowed only to take other functions as parameters. These
+       function parameters are pointers to functions being called, so we load those functions *)
+    L.build_load func_ptr "function_param_temp_load" builder*)
+  | Some Esc.LocalVarInfo { ty; llvalue_opt } ->
+    (* assuming info_tbl is correct, a local is found only in local scope while parsing *)
+    begin match llvalue_opt with
+    | None -> func_internal_error "local" "None" (* should have been allocated on it's function entry block *)
+    | Some llvalue_ptr -> match ty with
+      (* llvalue_ptr is function pointer so if on_call load function else return function pointer *)
+      | T.FUNC _ -> if on_call then L.build_load llvalue_ptr "function_param_temp_load" builder else llvalue_ptr
+      | _ -> llvalue_ptr
+    end
+  | Some Esc.EscVarInfo { ty; dec_depth; frame_offset } ->
+    let name = S.name name_sym in
+    let current_frame = function_frames_top () in
+    let declaration_frame = find_declaration_frame current_frame current_depth dec_depth in
+    let load_ptr = L.build_struct_gep declaration_frame (1 + frame_offset) (name ^ ":temp_gep") builder in
+    match ty with
+      (* load_ptr is function pointer so if on_call load function else return function pointer *)
+      | T.FUNC _ -> if on_call then L.build_load load_ptr "function_param_temp_load" builder else load_ptr
+      | _ -> load_ptr
 
 and build_alloca_end_of_entry_block lltype name array_size_opt =
   let instr_of_option = function
@@ -344,7 +350,6 @@ and build_func_return ret_llvalue =
 and build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt array_ptr_opt dims_len_llvalues =
   let store_to_struct ll_struct index value =
     let ptr = L.build_struct_gep ll_struct index "temp_struct_store_ptr" builder in
-    print_llvalue "ptr" ptr;
     ignore(L.build_store value ptr builder)
   in
   (* get struct type *)
@@ -352,40 +357,35 @@ and build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct
   in
   (* get or build array *)
   let array_ptr = match array_ptr_opt with
-  | Some ptr -> ptr
-  | None ->
-    (* create basic blocks array_dec_dim_check_failed, array_dec_dim_check_success *)
-    let function_block = builder |> L.insertion_block |> L.block_parent in
-    let array_failed_block = L.append_block ctx "array_dec_dim_check_failed" function_block in
-    let array_success_block = L.append_block ctx "array_dec_dim_check_success" function_block in
+    | Some ptr -> ptr
+    | None ->
+      (* create basic blocks array_dec_dim_check_failed, array_dec_dim_check_success *)
+      let func = builder |> L.insertion_block |> L.block_parent in
+      let array_failed_block = L.append_block ctx "array_dec_dim_check_failed" func in
+      let array_success_block = L.append_block ctx "array_dec_dim_check_success" func in
 
-    (* check if all dim sizes are greater than zero with consecutive and *)
-    let create_and prev_and dim_size =
-      (* 0 < dim_size *)
-      let pos_dim_cond = L.build_icmp L.Icmp.Slt (const_int 0) dim_size "array_dec_dim_cond" builder in
-      L.build_and prev_and pos_dim_cond "temp_pos_dim_cond" builder
-    in
-    let dim_check = List.fold_left create_and (const_bool true) dims_len_llvalues in
-    ignore(L.build_cond_br dim_check array_success_block array_failed_block builder);
+      (* check if all dim sizes are greater than zero with consecutive and *)
+      let create_and prev_and dim_size =
+        (* 0 < dim_size *)
+        let pos_dim_cond = L.build_icmp L.Icmp.Slt (const_int 0) dim_size "array_dec_dim_cond" builder in
+        L.build_and prev_and pos_dim_cond "temp_pos_dim_cond" builder
+      in
+      let dim_check = List.fold_left create_and (const_bool true) dims_len_llvalues in
+      ignore(L.build_cond_br dim_check array_success_block array_failed_block builder);
 
-    (* fill array_failed_block *)
-    L.position_at_end array_failed_block builder;
-    build_runtime_error "Non positive dimension size on array declaration";
-    ignore(L.build_br array_failed_block builder);
+      (* fill array_failed_block *)
+      L.position_at_end array_failed_block builder;
+      build_runtime_error "Non positive dimension size on array declaration";
+      ignore(L.build_br array_failed_block builder);
 
-    (* fill array_success_block *)
-    L.position_at_end array_success_block builder;
-    (* calculate size as multiplication of dims *)
-    let array_size = List.fold_left (fun acc d -> L.build_mul d acc "temp_array_size" builder) (const_int 1) dims_len_llvalues in
-    print_llvalue "array_size" array_size;
-    let elem_type = struct_llty |> L.struct_element_types |> fun arr -> Array.get arr 0 |> L.element_type in
-    print_lltype "struct_llty" struct_llty;
-    print_lltype "elem_ty" elem_type;
-    (* build alloca in current block instead of entry_block, because on runtime 
-        alloca instruction is before branch to dim_check blocks *)
-    let array_ptr = L.build_array_alloca elem_type array_size "temp_array_alloca" builder in
-    print_llvalue "array_ptr" array_ptr;
-    array_ptr
+      (* fill array_success_block *)
+      L.position_at_end array_success_block builder;
+      (* calculate size as multiplication of dims *)
+      let array_size = List.fold_left (fun acc d -> L.build_mul d acc "temp_array_size" builder) (const_int 1) dims_len_llvalues in
+      let elem_type = struct_llty |> L.struct_element_types |> fun arr -> Array.get arr 0 |> L.element_type in
+      (* build alloca in current block instead of entry_block, because on runtime 
+          alloca instruction is before branch to dim_check blocks *)
+      L.build_array_alloca elem_type array_size "temp_array_alloca" builder
   in
   (* get or build struct *)
   let struct_ptr = match struct_ptr_opt with
@@ -397,7 +397,6 @@ and build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct
     | None -> ()
     | Some struct_ptr_ptr -> ignore(L.build_store struct_ptr struct_ptr_ptr builder);
   in
-  print_llvalue "struct_ptr" struct_ptr;
   List.iteri (fun i llv -> store_to_struct struct_ptr i llv) (array_ptr :: dims_len_llvalues);
   struct_ptr
 
@@ -462,9 +461,9 @@ and build_binary_operator name_sym param_exprs generate_ir_fun =
   let build_short_circuited_logical_oper ll_lgc_fun short_llvalue p1_ll gen_p2 =
     (* create basic_blocks logical_non_short_circuit, logical_continue *)
     let current_block = builder |> L.insertion_block in
-    let function_block = current_block |> L.block_parent in
-    let non_short_block = L.append_block ctx "logical_non_short_circuit" function_block in
-    let continue_block = L.append_block ctx "logical_continue" function_block in
+    let func = current_block |> L.block_parent in
+    let non_short_block = L.append_block ctx "logical_non_short_circuit" func in
+    let continue_block = L.append_block ctx "logical_continue" func in
     
     (* fill current block *)
     let cond = L.build_icmp L.Icmp.Eq short_llvalue p1_ll "short_circuit_check" builder in
@@ -557,23 +556,21 @@ and build_binary_operator name_sym param_exprs generate_ir_fun =
 and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }) =
   let userdef_ty =  constrs |> List.hd |> userdef_ty_of_constr in
   let constr_lltypes = List.map (fun (TA.Constr { ty }) -> lltype_of_ty ty |> L.element_type) constrs in
-  List.iteri (fun i ty -> print_lltype (string_of_int i) ty) constr_lltypes;
 
   let create_userdef_named_struct_type () =
     let abi_size_of llty = LTG.DataLayout.abi_size llty ll_data_layout in
     let largest_lltype_of t1 t2 = if (abi_size_of t1) > (abi_size_of t2) then t1 else t2 in
     let largest_lltype = List.fold_left largest_lltype_of (List.hd constr_lltypes) constr_lltypes in
-    print_lltype "max_type" largest_lltype;
-    let struct_lltype =  userdef_ty |> lltype_of_ty |> L.element_type in (* opaque type *)
-    L.struct_set_body struct_lltype (L.struct_element_types largest_lltype) false; (* opaque type obtains body and becomes struct type *)
-    print_lltype (S.name name_sym) struct_lltype
+    (* opaque type *)
+    let struct_lltype =  userdef_ty |> lltype_of_ty |> L.element_type in
+    (* opaque type obtains body and becomes struct type *)
+    L.struct_set_body struct_lltype (L.struct_element_types largest_lltype) false
   
   and create_constr_named_struct_types () =
     let create_constr_named_struct_type (TA.Constr { name_sym; index }) lltype =
       let struct_name = llname_constr_of_constr_info name_sym userdef_ty in
       let struct_lltype = L.named_struct_type ctx struct_name in
       L.struct_set_body struct_lltype (L.struct_element_types lltype) false;
-      print_lltype struct_name struct_lltype;
       tbl_add constr_info_tbl struct_name (index, L.pointer_type struct_lltype)
     in
     List.iter2 create_constr_named_struct_type constrs constr_lltypes
@@ -582,11 +579,9 @@ and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }
     (* store previous_block in order to return in the end *)
     let previous_block = builder |> L.insertion_block in
 
-    (* declare function *)
-    let userdef_struct_pointer = userdef_ty |> lltype_of_ty in
-    let func_lltype = L.function_type bool_type [| userdef_struct_pointer; userdef_struct_pointer |] in
+    (* get already declared function *)
     let func_name = llname_equality_fun_of_userdef_ty userdef_ty in
-    let func = L.declare_function func_name func_lltype the_module in
+    let func = find_function_in_module func_name in
 
     (* create basic blocks entry, body, error, exit *)
     let entry_block = L.append_block ctx "entry" func in
@@ -716,28 +711,21 @@ and generate_ir_def depth info_tbl = function
       (* use lltype_of_ty to retrieve already declared type or declare new type.
         Types may be already declared when a var of custom type is found in the 
         escape or local vars of entry function *)
-      constrs |> List.hd |> userdef_ty_of_constr |> lltype_of_ty |> ignore
+      let userdef_ty = constrs |> List.hd |> userdef_ty_of_constr in
+      let userdef_struct_pointer =  lltype_of_ty userdef_ty in
+      (* declare equality function also, in case of recursive types *)
+      let func_lltype = L.function_type bool_type [| userdef_struct_pointer; userdef_struct_pointer |] in
+      let func_name = llname_equality_fun_of_userdef_ty userdef_ty in
+      ignore(L.declare_function func_name func_lltype the_module)
     in
     List.iter ensure_declared_userdef_type tdecs; (* decalare non-yet-declared custom types *)
     List.iter create_named_type_structs_and_equality_fun tdecs (* create struct types for opaque declared userdef type and constructor types *)
 
 and generate_ir_dec depth info_tbl = function
-  | TA.ConstVarDec { ty; name_sym; value } ->
+  | TA.ConstVarDec { name_sym; value } ->
     let llvalue = generate_ir_expr depth info_tbl value in
-    begin match value with
-    | TA.E_String { value } ->
-      (* String is represented as array of chars, so has lltype array struct. 
-         llvalue found above, here is the array_ptr *)
-      let struct_ptr_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
-      let struct_ptr_llty = lltype_of_ty ty in
-      let struct_ptr_name = (S.name name_sym) ^ "_alloca_ptr" in
-      let str_size_with_zeros = String.length value + 1 in
-      let array_size = const_int str_size_with_zeros in
-      ignore(build_array_struct struct_ptr_name struct_ptr_llty (Some struct_ptr_ptr) None (Some llvalue) [array_size])
-    | _ ->
-      let llvalue_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
-      ignore(L.build_store llvalue llvalue_ptr builder)
-    end
+    let llvalue_ptr = find_llvalue_ptr name_sym depth info_tbl false in
+    ignore(L.build_store llvalue llvalue_ptr builder)
   | TA.FunctionDec { ty; name_sym; params; body } ->
     let current_block = L.insertion_block builder in
     build_func_frame_vars name_sym ty info_tbl;
@@ -747,10 +735,10 @@ and generate_ir_dec depth info_tbl = function
     L.position_at_end current_block builder
   | TA.MutVarDec { ty; name_sym } ->
     let llvalue = L.const_null (lltype_of_ty ty) in
-    let llvalue_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let llvalue_ptr = find_llvalue_ptr name_sym depth info_tbl false in
     ignore(L.build_store llvalue llvalue_ptr builder)
   | TA.ArrayDec { ty; name_sym; dims_len_exprs } ->
-    let struct_ptr_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let struct_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
     let struct_ptr_llty = (lltype_of_ty ty) in
     let struct_ptr_name = (S.name name_sym) ^ "_alloca_ptr" in
     let dims_len_llvalues = List.map (generate_ir_expr depth info_tbl) dims_len_exprs in
@@ -758,35 +746,46 @@ and generate_ir_dec depth info_tbl = function
     
 and generate_ir_param func_name_sym info_tbl depth param_index (Param { name_sym }) =
   let func = find_function_in_module (S.name func_name_sym) in
-  let param_llvalue_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+  let param_llvalue_ptr = find_llvalue_ptr name_sym depth info_tbl false in
   let param_llvalue = L.param func param_index in
   ignore(L.build_store param_llvalue param_llvalue_ptr builder)
 
 and generate_ir_expr depth info_tbl expr: L.llvalue =
   let rec generate_ir_expr_aux = function
-  | TA.E_ID  { name_sym } ->
-    let id_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
-    L.build_load id_ptr "temp_load" builder
+  | TA.E_ID  { ty; name_sym } ->
+    let llvalue_ptr = find_llvalue_ptr name_sym depth info_tbl false in
+    begin match ty with
+      | T.FUNC _ -> llvalue_ptr (* return function pointer and do not load the function *)
+      | _ -> L.build_load llvalue_ptr "temp_id_load" builder
+    end
   | TA.E_Int  { ty; value } -> 
     L.const_int (lltype_of_ty ty) value
   | TA.E_Float { ty; value } -> 
     L.const_float (lltype_of_ty ty) value
   | TA.E_Char { ty; value } -> 
     L.const_int (lltype_of_ty ty) (int_of_char value)
-  | TA.E_String  { value } ->
-    get_or_build_global_string_pointer value
+  | TA.E_String  { ty; value } ->
+    (* create or get char array pointer and create it's size *)
+    let array_ptr = get_or_build_global_string_pointer value in
+    let str_size_with_zeros = String.length value + 1 in
+    let array_size = const_int str_size_with_zeros in
+    (* create struct info *)
+    let struct_ptr_llty = lltype_of_ty ty in
+    let struct_ptr_name =  "string_struct_alloca_ptr" in
+    (* create and fill struct with array_ptr and size and return struct_ptr *)
+    build_array_struct struct_ptr_name struct_ptr_llty None None (Some array_ptr) [array_size]
   | TA.E_BOOL { ty; value } -> 
     L.const_int (lltype_of_ty ty) (if value then 1 else 0)
   | TA.E_Unit _ -> 
     unit_value
   | TA.E_ArrayRef { name_sym; exprs } ->
     (* create basic blocks array_ref_bound_check_failed, array_ref_bound_check_success *)
-    let function_block = builder |> L.insertion_block |> L.block_parent in
-    let array_failed_block = L.append_block ctx "array_ref_bound_check_failed" function_block in
-    let array_success_block = L.append_block ctx "array_ref_bound_check_success" function_block in
+    let func = builder |> L.insertion_block |> L.block_parent in
+    let array_failed_block = L.append_block ctx "array_ref_bound_check_failed" func in
+    let array_success_block = L.append_block ctx "array_ref_bound_check_success" func in
 
     (* get array_struct_ptr and generate dim expressions *)
-    let struct_ptr_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let struct_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
     let struct_ptr = L.build_load struct_ptr_ptr "array_struct_alloca_ptr_load" builder in
     let exprs_ll = List.map generate_ir_expr_aux exprs in
     
@@ -834,7 +833,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     L.build_gep array_ptr [| array_index |] "temp_array_element_gep" builder
   | TA.E_ArrayDim { dim; name_sym } ->
     (* bound check if 1 <= dim <= dimNum *)
-    let struct_ptr_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let struct_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
     let struct_ptr = L.build_load struct_ptr_ptr "array_struct_alloca_ptr_load" builder in
 
     (* remove first element which is array pointer *)
@@ -863,23 +862,20 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     else if is_binary_operator (S.name name_sym)
       then build_binary_operator name_sym param_exprs generate_ir_expr_aux
     else
-      let callee = find_function_in_module (S.name name_sym) in
+      let callee = find_llvalue_ptr name_sym depth info_tbl true in
       let param_llvalues = List.map generate_ir_expr_aux param_exprs in
       L.build_call callee (Array.of_list param_llvalues) "temp_call" builder
   | TA.E_ConstrCall { ty; name_sym; param_exprs; loc} ->
     let userdef_struct_pointer_lltype = lltype_of_ty ty in
     let userdef_struct_lltype = L.element_type userdef_struct_pointer_lltype in
-    print_lltype ("userdef struct type:") userdef_struct_lltype;
     let llname = llname_constr_of_constr_info name_sym ty in
     let tag, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
       | Some (tag, lltype) -> tag, lltype
       | None -> internal_error_of_msg_format (Some loc) "Some (tag, lltype)" "None" "constr_info_tbl" "pair"
     in
-    print_lltype ("constr type: (tag = " ^ string_of_int tag ^ ")") constr_struct_pointer_lltype;
 
     (* allocate userdef struct *)
     let userdef_struct = build_alloca_end_of_entry_block userdef_struct_lltype ("temp_userdef_type:" ^ (S.name name_sym)) None in
-    print_llvalue "userdef_struct" userdef_struct;
     
     (* store tag *)
     let tag_ptr = L.build_struct_gep userdef_struct 0 "userdef_struct_tag_ptr" builder in
@@ -888,12 +884,10 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     if List.length param_exprs > 0 then begin
       (* allocate userdef struct pointer and store userdef struct *)
       let userdef_struct_pointer = build_alloca_end_of_entry_block userdef_struct_pointer_lltype ("temp_userdef_pointer_type:" ^ (S.name name_sym)) None in
-      print_llvalue "userdef_struct_pointer" userdef_struct_pointer;
       ignore(L.build_store userdef_struct userdef_struct_pointer builder);
 
       (* cast userdef_struct pointer to specific constr struct pointer *)
       let constr_struct = L.build_pointercast userdef_struct_pointer constr_struct_pointer_lltype "userdef_to_constr_cast" builder in
-      print_llvalue "casted_constr_struct" constr_struct;
 
       (* store all other parameters to constr_struct *)
       let param_llvalues = List.map generate_ir_expr_aux param_exprs in
@@ -913,59 +907,72 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     generate_ir_expr_aux expr
   | TA.E_MatchedIF { if_expr; then_expr; else_expr } ->
     (* build basic blocks then, else and merge *)
-    let function_block = builder |> L.insertion_block |> L.block_parent in
-    let then_block = L.append_block ctx "if_then" function_block in
-    let else_block = L.append_block ctx "if_else" function_block in
-    let merge_block = L.append_block ctx "if_merge" function_block in
+    let func = builder |> L.insertion_block |> L.block_parent in
+    let then_block = L.append_block ctx "if_then" func in
+    let else_block = L.append_block ctx "if_else" func in
+    let merge_block = L.append_block ctx "if_merge" func in
 
     (* build condition *)
     let cond_llvalue = generate_ir_expr_aux if_expr in
     ignore(L.build_cond_br cond_llvalue then_block else_block builder);
 
-    (* build then block *)
+    (* fill then block *)
     L.position_at_end then_block builder;
     let then_llvalue = generate_ir_expr_aux then_expr in
+    (* block might have changed *)
+    let end_of_then_block = builder |> L.insertion_block in
     ignore(L.build_br merge_block builder);
 
-    (* build else block *)
+    (* fill else block *)
+    L.move_block_after end_of_then_block else_block;
     L.position_at_end else_block builder;
     let else_llvalue = generate_ir_expr_aux else_expr in
+    (* block might have changed *)
+    let end_of_else_block = builder |> L.insertion_block in
     ignore(L.build_br merge_block builder);
 
-    (* build phi node on merge block and return phi value *)
+    (* fill merge block *)
+    (* keep visual block order and move after_block *)
+    L.move_block_after end_of_else_block merge_block;
     L.position_at_end merge_block builder;
-    L.build_phi [(then_llvalue, then_block); (else_llvalue, else_block)] "temp_phi" builder
+    (* build phi node on merge block and return phi value *)
+    L.build_phi [(then_llvalue, end_of_then_block); (else_llvalue, end_of_else_block)] "temp_phi" builder
   | TA.E_WhileDoDone  { while_expr; do_expr; loc} ->
     (* build basic blocks check, body and after *)
-    let function_block = builder |> L.insertion_block |> L.block_parent in
-    let check_block = L.append_block ctx "while_check" function_block in
-    let body_block = L.append_block ctx "while_body" function_block in
-    let after_block = L.append_block ctx "while_after" function_block in
+    let func = builder |> L.insertion_block |> L.block_parent in
+    let check_block = L.append_block ctx "while_check" func in
+    let body_block = L.append_block ctx "while_body" func in
+    let after_block = L.append_block ctx "while_after" func in
     ignore(L.build_br check_block builder);
 
-    (* build check block *)
+    (* fill check block *)
     L.position_at_end check_block builder;
     let cond_llvalue = generate_ir_expr_aux while_expr in
     ignore(L.build_cond_br cond_llvalue body_block after_block builder);
 
-    (* build body block *)
+    (* fill body block *)
     L.position_at_end body_block builder;
     ignore(generate_ir_expr_aux do_expr);
+    (* block might have changed *)
+    let end_of_body_block = builder |> L.insertion_block in
+    (* build branch from current end_of_body block to check_block *)
     ignore(L.build_br check_block builder);
 
+    (* keep visual block order and move after_block *)
+    L.move_block_after end_of_body_block after_block;
     (* position builder at after block and return unit value *)
     L.position_at_end after_block builder;
     unit_value
   | TA.E_ForDoDone { count_var_sym; start_expr; count_dir; end_expr; do_expr; loc } ->
     (* build basic blocks check, body and after *)
     let pre_loop_block = builder |> L.insertion_block in
-    let function_block =  pre_loop_block |> L.block_parent in
-    let check_block = L.append_block ctx "for_check" function_block in
-    let body_block = L.append_block ctx "for_body" function_block in
-    let after_block = L.append_block ctx "for_after" function_block in
-    
+    let func =  pre_loop_block |> L.block_parent in
+    let check_block = L.append_block ctx "for_check" func in
+    let body_block = L.append_block ctx "for_body" func in
+    let after_block = L.append_block ctx "for_after" func in
+
     (* count_var and step value *)
-    let count_var_ptr = find_llvalue_ptr_of_var count_var_sym depth info_tbl in
+    let count_var_ptr = find_llvalue_ptr count_var_sym depth info_tbl false in
     let step_llvalue = const_int 1 in
 
     (* funs according to count direction *)
@@ -979,7 +986,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let end_llvalue = generate_ir_expr_aux end_expr in
     ignore(L.build_br check_block builder);
 
-    (* build check block *)
+    (* fill check block *)
     L.position_at_end check_block builder;
     let loop_llvalue = L.build_empty_phi int_type "loop_var" builder in
     ignore(L.build_store loop_llvalue count_var_ptr builder);
@@ -987,23 +994,29 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let cond_llvalue = cond_llfun loop_llvalue end_llvalue "cond" builder in
     ignore(L.build_cond_br cond_llvalue body_block after_block builder);
 
-    (* build body block *)
+    (* fill body block *)
     L.position_at_end body_block builder;
     ignore(generate_ir_expr_aux do_expr);
+    (* block might have changed *)
+    let end_of_body_block = builder |> L.insertion_block in
+    (* increment loop value in a new variable and add to phi *)
     let next_llvalue = step_llfun loop_llvalue step_llvalue "next_loop_var" builder in
-    L.add_incoming (next_llvalue, body_block) loop_llvalue;
+    L.add_incoming (next_llvalue, end_of_body_block) loop_llvalue;
+    (* create branch to check block in current end_of_body_block *)
     ignore(L.build_br check_block builder);
-
+    
+    (* keep visual block order and move after_block *)
+    L.move_block_after end_of_body_block after_block;
     (* position builder at after block and return unit value *)
     L.position_at_end after_block builder;
     unit_value
   | TA.E_MatchWithEnd { ty; match_expr; with_clauses; loc } ->
-    let function_block = builder |> L.insertion_block |> L.block_parent in
+    let func = builder |> L.insertion_block |> L.block_parent in
     
     let rec create_match_check_blocks start finish acc =
       let block_name = "match_check_" ^ (string_of_int (start + 1)) in
       if start = finish then List.rev acc
-      else create_match_check_blocks (start + 1) finish ((L.append_block ctx block_name function_block) :: acc)
+      else create_match_check_blocks (start + 1) finish ((L.append_block ctx block_name func) :: acc)
     in 
     let prepend_index_string = List.mapi (fun i (b1, b2) -> (string_of_int (i + 1), b1, b2)) in
 
@@ -1012,29 +1025,39 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
 
     (* create match_check blocks for every clause and match failed block *)
     let match_check_blocks = create_match_check_blocks 0 (List.length with_clauses) [] in
-    let match_failed_block = L.append_block ctx "match_failed" function_block in
+    let match_failed_block = L.append_block ctx "match_failed" func in
 
     (* create (current, next) pairs of blocks for every clause *)
     let match_next_check_blocks = (List.tl match_check_blocks) @ [match_failed_block] in
     let match_block_pairs  = List.map2 (fun b1 b2 -> b1, b2) match_check_blocks match_next_check_blocks |> prepend_index_string in
 
     (* create finish block *)
-    let match_finished_block = L.append_block ctx "match_finished" function_block in
+    let match_finished_block = L.append_block ctx "match_finished" func in
 
     (* generate all clauses *)
     ignore(L.build_br (List.hd match_check_blocks) builder);
     let value_block_phi_pairs = List.map2 (generate_ir_clause match_llvalue match_finished_block) match_block_pairs with_clauses in
 
     (* fill match_failed block *)
+    (* keep visual block order and move match_failed_block *)
+    let rec get_last_block = function
+      | [] -> internal_error None "empty pairs provided in get_last_block"
+      | [(_, b)] -> b 
+      | p :: ps -> get_last_block ps
+    in
+    let last_end_of_success_block = get_last_block value_block_phi_pairs in
+    L.move_block_after last_end_of_success_block match_failed_block;
     L.position_at_end match_failed_block builder;
     build_runtime_error "Given expression could not be matched with some clause";
     ignore(L.build_br match_failed_block builder);
-
+    
     (* fill match_finished block *)
+    (* keep visual block order and move match_finished_block *)
+    L.move_block_after match_failed_block match_finished_block;
     L.position_at_end match_finished_block builder;
     L.build_phi value_block_phi_pairs "temp_match_phi" builder
 
-  and generate_ir_clause match_llvalue match_finished_block (idx_str, match_check_block, next_match_check_block) = function
+and generate_ir_clause match_llvalue match_finished_block (idx_str, match_check_block, next_match_check_block) = function
   | TA.BasePattClause { base_pattern; expr; loc } ->
     (* build basic blocks match_success *)
     let match_success_block = L.insert_block ctx ("match_success_" ^ idx_str) next_match_check_block in
@@ -1047,8 +1070,12 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     (* fill success block *)
     L.position_at_end match_success_block builder;
     let success_llvalue = generate_ir_expr_aux expr in
+    (* block might have changed *)
+    let end_of_success_block = builder |> L.insertion_block in
     ignore(L.build_br match_finished_block builder);
-    success_llvalue, match_success_block
+
+    (* return phi pair *)
+    success_llvalue, end_of_success_block
   | TA.ConstrPattClause { constr_pattern; expr; loc } ->
     (* build basic blocks match_param_check and match_success *)
     let match_param_check_block = L.insert_block ctx ("match_param_check_" ^ idx_str) next_match_check_block in
@@ -1062,10 +1089,14 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     (* fill success block *)
     L.position_at_end match_success_block builder;
     let success_llvalue = generate_ir_expr_aux expr in
+    (* block might have changed *)
+    let end_of_success_block = builder |> L.insertion_block in
     ignore(L.build_br match_finished_block builder);
-    success_llvalue, match_success_block
+    
+    (* return phi pair*)
+    success_llvalue, end_of_success_block
 
-  and generate_ir_base_pattern match_llvalue = function
+and generate_ir_base_pattern match_llvalue = function
   | TA.BP_INT { num } -> 
     L.build_icmp L.Icmp.Eq (const_int num) match_llvalue "pattern_comp" builder
   | TA.BP_FLOAT { num } -> 
@@ -1075,11 +1106,11 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.BP_BOOL { value } -> 
     L.build_icmp L.Icmp.Eq (const_bool value) match_llvalue "pattern_comp" builder
   | TA.BP_ID { name_sym; loc } ->
-    let id_ptr = find_llvalue_ptr_of_var name_sym depth info_tbl in
+    let id_ptr = find_llvalue_ptr name_sym depth info_tbl false in
     ignore(L.build_store match_llvalue id_ptr builder);
     const_bool true
 
-  and generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block (TA.CP_BASIC { ty; constr_sym; base_patterns; loc }) =
+and generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block (TA.CP_BASIC { ty; constr_sym; base_patterns; loc }) =
     let llname = llname_constr_of_constr_info constr_sym ty in
     let tag, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
       | Some (tag, lltype) -> tag, lltype
@@ -1097,7 +1128,6 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
 
     (* cast userdef_struct pointer to specific constr struct pointer *)
     let match_constr_struct = L.build_pointercast match_llvalue constr_struct_pointer_lltype "matched_type_to_constr_cast" builder in
-    print_llvalue "matched_casted_constr_struct" match_constr_struct;
 
     (* create list with match_llvalues of constructor params *)
     let load_from_constr_struct idx =

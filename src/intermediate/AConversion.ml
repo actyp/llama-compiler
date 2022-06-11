@@ -42,11 +42,12 @@ let fresh_sym gen name_sym = S.symbol (fresh_name gen name_sym)
 let add_name_sym senv name_sym name_sym' = S.enter senv name_sym name_sym'
 
 (** [lookup_sym senv name_sym] returns the name_sym mapping of [name_sym] in [senv]
-    or the same [name_sym] if [name_sym] is not in [senv] -- useful with external
-    functions that are not renamed *)
+    If [name_sym] is not in [senv], it is a function from [Environment] that is not renamed,
+    but replaced with (name, 0) symbol, in order 0 not to collide with newly A-converted
+    symbols *)
 let lookup_sym senv name_sym = match S.look senv name_sym with
   | Some s -> s
-  | None -> name_sym
+  | None -> (S.name name_sym, 0)
 
 (** [convert_list_seq f_cnv env ls] applies convert function [f_cnv] sequentially
     to each member of tast nodes in list [ls] starting with initial env [env] and
