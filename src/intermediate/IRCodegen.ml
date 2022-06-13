@@ -37,7 +37,9 @@ and function_frames_pop () = Stack.pop function_frames
 and function_frames_top () = Stack.top function_frames
 and function_frames_is_empty () = Stack.is_empty function_frames
   
-let pprint (llmodule: L.llmodule): unit = L.dump_module llmodule
+let pprint_to_file (filename: string) (llmodule: L.llmodule): unit = L.print_module filename llmodule
+
+let pprint (llmodule: L.llmodule): unit = pprint_to_file "-" llmodule
 
 let print_lltype msg lltype = Printf.printf "%s lltype: %s\n" msg (L.string_of_lltype lltype); flush stdout
 and print_llvalue msg llvalue = Printf.printf "%s llvalue: %s\n" msg (L.string_of_llvalue llvalue); flush stdout
@@ -705,7 +707,7 @@ let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: Esc.info_tbl_t): L.ll
   declare_external_functions ();
   build_utility_funs ();
 
-  build_func_frame_vars ("entry_func", 0) (T.FUNC ([], T.INT)) info_tbl;
+  build_func_frame_vars ("main", 0) (T.FUNC ([], T.INT)) info_tbl;
 
   let init_depth = 0 in
   List.iter (generate_ir_def (init_depth + 1) info_tbl) tast;

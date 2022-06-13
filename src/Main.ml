@@ -1,14 +1,23 @@
 (** Usage message of llamac *)
 let usage_msg = String.concat " " ["Usage:"; Sys.argv.(0); "[-flag] [--option] filename"]
 
+(** llc exetutable *)
+let llc_exe = "llc"
+
+(** clang exetutable *)
+and clang_exe = "clang"
+
+(** runtime external functions file *)
+and ext_funs_c_file = "src/runtime/external_functions.c"
+
 (** Variable for input file *)
 let filename = ref ""
 
 (** Types of output options *)
-type output_opt = Lex | Parse | Infer | IR | Asm | ToFiles
+type output_option = Lex | Parse | Infer | IR | Asm | ToFiles
 
 (** Variable for option selection *)
-let output_opt: output_opt ref = ref ToFiles
+let output_opt: output_option ref = ref ToFiles
 
 (** [select_opt outp _] changes the value of [output_opt] to [outp] *)
 let select_opt outp _ = output_opt := outp
@@ -18,7 +27,7 @@ let optmz_flag = ref false
 (** command line options *)
 let speclist = Arg.align [
   ("\nFlags & Options:", Arg.Unit ignore, " ");
-  ("-O", Arg.Set optmz_flag, " Optimization flag");
+  ("-O", Arg.Set optmz_flag, " Llvm IR Optimization flag");
   ("-i", Arg.Unit (select_opt IR), " Output of LLVM IR to std_out");
   ("-f", Arg.Unit (select_opt Asm), " Output of assembly to std_out");
   ("--lex", Arg.Unit (select_opt Lex) , " Lexical analysis only");
@@ -50,6 +59,7 @@ let lex_only_fun in_ch =
 (** [gen_ast in_ch] parses the input channel [in_ch] and returns the AST *)
 let gen_ast in_ch =
   let lexbuf = Lexing.from_channel in_ch in
+  lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with pos_fname = !filename };
   try
     Parser.program Lexer.lexer lexbuf
   with
@@ -92,7 +102,46 @@ let gen_ir in_ch optmz =
     close_exit in_ch 1
 
 (** [ir_out_fun in_ch] generates and outputs to std_out the LLVM IR of input channel [in_ch] *)
-let ir_out_fun in_ch optmz = IRCodegen.pprint (gen_ir in_ch optmz)
+let ir_only_fun in_ch optmz = IRCodegen.pprint (gen_ir in_ch optmz)
+
+(** [gen_asm in_ch optmz to_stdout_only] generates and outputs assembly to std_out if [to_stdout_only] is true
+    or generates and stores to file <filename'>.imm the llvm IR, to file <filename'>.asm the assembly and 
+    generates the final executable file <filename'>, where <filename'> i the <filename> without file extension *)
+let gen_asm in_ch optmz to_stdout_only = 
+  let exec_and_check_cmd cmd =
+    let exit_with_msg msg =
+      let prefix = "Error: Execution of command '" ^ cmd ^ "'"in
+      Printf.printf "%s %s\n" prefix msg;
+      close_exit in_ch 1
+    in
+    match Unix.system cmd with
+      | WEXITED code when code <> 0 -> exit_with_msg ("returned code: " ^ (string_of_int code))
+      | WSIGNALED signum -> exit_with_msg ("killed by signal with number: " ^ (string_of_int signum))
+      | WSTOPPED signum -> exit_with_msg ("stopped by signal with number: " ^ (string_of_int signum))
+      | _ -> ()
+  in
+  let filename_without_extension = Filename.remove_extension !filename in
+
+  let ir_filename = filename_without_extension ^ ".imm" in
+  let ir_module = gen_ir in_ch optmz in
+  IRCodegen.pprint_to_file ir_filename ir_module;
+  
+  let asm_filename = filename_without_extension ^ ".asm" in
+  let to_asm_cmd = Printf.sprintf "%s --relocation-model=pic -o %s %s" llc_exe asm_filename ir_filename in
+  exec_and_check_cmd to_asm_cmd;
+
+  if to_stdout_only then begin
+    let cat_cmd = Printf.sprintf "cat %s" asm_filename in
+    exec_and_check_cmd cat_cmd;
+    let rm_cmd = Printf.sprintf "rm %s %s" ir_filename asm_filename in
+    exec_and_check_cmd rm_cmd
+  end
+  else begin
+    let exe_filename = filename_without_extension ^ ".out" in
+    (* -lm is the link to math library 'libm' used by external functions *)
+    let to_exe_cmd = Printf.sprintf "%s -o %s %s %s -lm" clang_exe exe_filename asm_filename ext_funs_c_file in
+    exec_and_check_cmd to_exe_cmd
+  end
 
 (** [parse_cmd_line ()] parses command line arguments and returns the in_channel
     after opening [filename], while handling any error occured *)
@@ -115,6 +164,6 @@ let main =
   | Lex -> lex_only_fun in_ch
   | Parse -> parse_only_fun in_ch
   | Infer -> infer_only_fun in_ch
-  | IR -> ir_out_fun in_ch !optmz_flag
-  | Asm -> ()
-  | ToFiles -> ()
+  | IR -> ir_only_fun in_ch !optmz_flag
+  | Asm -> gen_asm in_ch !optmz_flag true
+  | ToFiles -> gen_asm in_ch !optmz_flag false

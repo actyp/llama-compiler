@@ -103,7 +103,7 @@ unit_t lla_print_string(array_of_char ac) {
 
 /***** Mathematical functions *****/
 int_t lla_abs(int_t i) {
-    return (int_t) abs(i);
+    return (int_t) labs(i);
 }
 
 float_t lla_fabs(float_t f) {

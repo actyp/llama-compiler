@@ -115,7 +115,7 @@ let cleanup_func_dec (tbl: info_tbl_t) name_sym =
 
 let rec analyse (tast: TA.tast): info_tbl_t =
   let info_tbl: info_tbl_t = H.create 512 in
-  let init_depth = 0 and init_func_sym = ("entry_func", 0) and init_func_ty = T.FUNC ([], T.INT) in
+  let init_depth = 0 and init_func_sym = ("main", 0) and init_func_ty = T.FUNC ([], T.INT) in
   (* create a single outer wrapper function 'entry_func', so that
      global variables can be escaping variables of 'entry_func' *)
   add_fun_to_tbl info_tbl init_func_sym init_func_ty init_depth [] [];
