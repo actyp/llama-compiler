@@ -1,11 +1,5 @@
-true:\
-use_menhir,\
-explain,\
-package(unix),\
-package(ppx_deriving.std),\
-package(llvm),\
-package(llvm.analysis),\
-package(llvm.all_backends),\
-package(llvm.target),\
-package(llvm.ipo),\
-package(llvm.scalar_opts)
+true: use_menhir, explain, package(unix), package(ppx_deriving.std),\
+      package(llvm), package(llvm.analysis), package(llvm.all_backends),\
+      package(llvm.target), package(llvm.ipo), package(llvm.scalar_opts)
+
+<src/runtime/**>: not_hygienic

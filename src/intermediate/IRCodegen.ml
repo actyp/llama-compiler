@@ -20,30 +20,49 @@ let internal_error loc_opt msg_fmt =
   | None -> Error.internal error_fmt
   | Some loc -> Error.pos_internal_error loc error_fmt
 
+(** [internal_error_of_msg_format loc_opt expected found func_name] invokes [internal_error] with a
+    specified msg_format: '[expected] found as [found] in [func_name]' *)
 let internal_error_of_msg_format loc_opt expected found func_name = 
   let msg_fmt = expected ^^ " %s found as " ^^ found ^^ " in " ^^ func_name in
   internal_error loc_opt msg_fmt
 
+(** [global_str_tbl] is the hashtbl holding mappings of strings to their llvalues, in order to
+    reuse same strings *)
 let global_str_tbl: (string, L.llvalue) H.t = H.create 512
+
+(** [constr_info_tbl] is the hashtbl holding mappings of constructor full names to their (index, lltype) pair.
+    Full name of a constructor is <typename:occ_num:constr_name>*)
 let constr_info_tbl: (string, (int * L.lltype)) H.t = H.create 512
 
+(** [tbl_add tbl key entry] adds or overwrites the mapping [key] -> [entry] in hashtbl [tbl] *)
 let tbl_add tbl key entry = H.replace tbl key entry
+
+(** [tbl_find_opt tbl key] returns an option of the mapping of [key] in hashtbl [tbl] *)
 and tbl_find_opt tbl key = H.find_opt tbl key
 
-
+(** [function_frames] is the stack holding the llvalues of function frames *)
 let rec function_frames = Stack.create()
+(** [function_frames_push frame] pushes the [frame] on top of [function_frames] *)
 and function_frames_push frame = Stack.push frame function_frames
+(** [function_frames_pop] pops the [frame] on top of [function_frames] *)
 and function_frames_pop () = Stack.pop function_frames
+(** [function_frames_top] returns the [frame] on top of [function_frames] without removing it *)
 and function_frames_top () = Stack.top function_frames
+(** [function_frames_is_empty] returns whether [function_frames] is an empty stack or not *)
 and function_frames_is_empty () = Stack.is_empty function_frames
-  
+
 let pprint_to_file (filename: string) (llmodule: L.llmodule): unit = L.print_module filename llmodule
 
 let pprint (llmodule: L.llmodule): unit = pprint_to_file "-" llmodule
 
+(** [print_lltype msg lltype] prints to stdout '[msg] lltype: [lltype]' and flushes stdout. 
+    May be used for debugging purposes, justifying the immediate stdout flush *)
 let print_lltype msg lltype = Printf.printf "%s lltype: %s\n" msg (L.string_of_lltype lltype); flush stdout
+(** [print_llvalue msg llvalue] prints to stdout '[msg] llvalue: [llvalue]' and flushes stdout. 
+    May be used for debugging purposes, justifying the immediate stdout flush *)
 and print_llvalue msg llvalue = Printf.printf "%s llvalue: %s\n" msg (L.string_of_llvalue llvalue); flush stdout
 
+(* llvm initial info and optimization functions *)
 let _ = LBE.initialize()
 let ll_target_triple = LTG.Target.default_triple ()
 let ll_target = LTG.Target.by_triple ll_target_triple
@@ -68,36 +87,52 @@ let ll_opt_funs = [
   LSO.add_basic_alias_analysis; LSO.add_unify_function_exit_nodes
 ]
 
+(** [ctx] is the global context used by llvm *)
 let ctx = L.global_context ()
+(** [the_module] is the single module used by llvm *)
 let the_module = L.create_module ctx "llama"
+(** [builder] is the builder used by llvm to move around and generate code *)
 let builder = L.builder ctx
 
+(* llvm type definitions *)
 let int_type = L.integer_type ctx 64
 and char_type = L.integer_type ctx 8
 and bool_type = L.integer_type ctx 1
 and float_type = L.float_type ctx
 and struct_type = L.struct_type ctx
 
+(* llvm const_type functions *)
 let const_int i = L.const_int int_type i
 and const_char c = L.const_int char_type c
 and const_bool b = L.const_int bool_type (if b then 1 else 0)
 and const_float f = L.const_float float_type f
 
+(* unit type and unit value *)
 let unit_type = bool_type
 let unit_value = L.const_null unit_type
 
+(* set of strings for operator names and external function names *)
 module StringSet = Set.Make(String)
 
+(** [string_set_of_list] is an alias to create a new StringSet from the empty set *)
 let string_set_of_list = List.fold_left (fun set str -> StringSet.add str set) StringSet.empty
 
+(** [unary_operator_name_set] is the [StringSet] containing unary operator names *)
 let unary_operator_name_set = string_set_of_list Env.unary_operator_names
+(** [binary_operator_name_set] is the [StringSet] containing binary operator names *)
 and binary_operator_name_set = string_set_of_list Env.binary_operator_names
+(** [external_function_name_set] is the [StringSet] containing external function names *)
 and external_function_name_set = string_set_of_list Env.external_function_names
 
+(** [is_unary_operator name] checks if [name] is in [unary_operator_name_set] *)
 let is_unary_operator name = StringSet.mem name unary_operator_name_set
+(** [is_binary_operator name] checks if [name] is in [binary_operator_name_set] *)
 and is_binary_operator name = StringSet.mem name binary_operator_name_set
+(** [is_external_function name] checks if [name] is in [external_function_name_set] *)
 and is_external_function name = StringSet.mem name external_function_name_set
 
+(** [get_or_build_global_string_pointer string_value] gets already built or builds new global string
+    and returns a pointer to it *)
 let get_or_build_global_string_pointer string_value =
   match tbl_find_opt global_str_tbl string_value with
   | Some string_ptr -> string_ptr
@@ -106,25 +141,33 @@ let get_or_build_global_string_pointer string_value =
     tbl_add global_str_tbl string_value string_ptr;
     string_ptr
 
+(** [llname_userdef_of_userdef_ty ty] returns the full name of userdef type [ty], which is 'name:occ_num' *)
 let rec llname_userdef_of_userdef_ty = function
   | T.USERDEF (name_sym, occ_num) -> (S.name name_sym) ^ ":" ^ (string_of_int occ_num)
   | _ -> internal_error_of_msg_format None "USERDEF" "other type" "llname_userdef_of_userdef_ty" "type"
 
+(** [llname_constr_of_constr_info name_sym userdef_ty] returns the full name of a constructor from it's [name_sym]
+    and [userdef_ty], which is 'userdef_ty_name:occ_num:constr_name' *)
 and llname_constr_of_constr_info name_sym userdef_ty =
   let userdef_ty_name =  llname_userdef_of_userdef_ty userdef_ty in
   userdef_ty_name ^ ":" ^ (S.name name_sym)
 
+(** [llname_equality_fun_of_userdef_ty ty] returns the name of equality function for the userdef_ty [ty],
+    which is '_<userdef_ty_name:occ_num>_equality_fun' *)
 and llname_equality_fun_of_userdef_ty = function
   | T.USERDEF _ as ty -> "_" ^ (llname_userdef_of_userdef_ty ty) ^ "_equality"
   | _ -> internal_error_of_msg_format None "USERDEF" "other type" "llname_equality_fun_of_userdef_ty" "type"
 
+(** [userdef_ty_of_constr_ty ty] returns the userdef ty of given constr ty [ty] *)
 and userdef_ty_of_constr_ty = function
   | T.CONSTR (_, ty, _) -> ty
   | _ -> internal_error_of_msg_format None "CONSTR" "other type" "userdef_ty_of_constr_ty" "type"
 
+(** [userdef_ty_of_constr c] returns the userdef ty of given TA.constr [c] *)
 and userdef_ty_of_constr (TA.Constr { ty }) =
   userdef_ty_of_constr_ty ty
 
+(** [lltype_of_ty ty] returns the corresponding lltype of given Types.ty [ty] *)
 let rec lltype_of_ty: T.ty -> L.lltype = function
   | T.UNIT -> unit_type
   | T.INT -> int_type
@@ -161,6 +204,7 @@ let rec lltype_of_ty: T.ty -> L.lltype = function
   | T.VAR _ -> bool_type
   | T.POLY _ -> internal_error None "poly type encountered in lltype_of_ty"
 
+(** [declare_external_functions ()] iterates and declares the external functions Env.external_functions *)
 and declare_external_functions () =
   let rec declare_from_list = function
     | [] -> ()
@@ -172,6 +216,7 @@ and declare_external_functions () =
   in
   List.iter declare_from_list Env.external_functions
 
+(** [declare_function name_sym func_ty] declares function with Types.ty [func_ty] and name taken from [name_sym] *)
 and declare_function name_sym func_ty =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "declare_function" (S.name name_sym)
@@ -183,6 +228,7 @@ and declare_function name_sym func_ty =
   let func = L.declare_function (S.name name_sym) func_type the_module in
   func
 
+(** [build_utility_funs ()] builds some utility functions: _runtime_error, _binary_int_division, _binary_float_division *)
 and build_utility_funs () =
   let build_runtime_error_fun () =
     (* declare function *)
@@ -250,6 +296,7 @@ and build_utility_funs () =
   build_division_fun ("_binary_int_division", 0) int_type (L.build_icmp L.Icmp.Eq (const_int 0)) L.build_sdiv;
   build_division_fun ("_binary_float_division", 0)  float_type (L.build_fcmp L.Fcmp.Oeq (const_float 0.0)) L.build_fdiv
 
+(** [build_runtime_error msg] generates ir in order to call '_runtime_error' function *)
 and build_runtime_error msg =
   (* get or build error char array *)
   let error_str = "Runtime Error: " ^ msg ^ "\n" in
@@ -261,6 +308,7 @@ and build_runtime_error msg =
   let func = find_function_in_module "_runtime_error" in
   ignore(L.build_call func [| array_ptr; array_size |] "_runtime_error_call" builder)
 
+(** [find_function_in_module name] returns the llvalue of function [name] *)
 and find_function_in_module name =
   (* add 'lla_' prefix in case of external function *)
   let func_name = if is_external_function name then "lla_" ^ name else name in
@@ -268,6 +316,8 @@ and find_function_in_module name =
     | Some f -> f
     | None -> internal_error None "function %s not found in the_module" name
 
+(** [build_func_frame_vars name_sym func_ty info_tbl] declares the function if needed, builds it's basic blocks,
+    builds it's function frame with escaping variables, allocates it's local variables in entry block *)
 and build_func_frame_vars name_sym func_ty info_tbl =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "build_func_frame_vars" (S.name name_sym)
@@ -314,6 +364,10 @@ and build_func_frame_vars name_sym func_ty info_tbl =
   ignore(L.build_br body_block builder);
   ignore(L.position_at_end body_block builder)
 
+(** [find_llvalue_ptr name_sym current_depth info_tbl on_call] searches in [info_tbl] to find the llvalue
+    of the varible with name from [name_sym]. [current_depth] is used in case of escaping variable to 
+    traverse through function frames and [on_call] is used when searching a function llvalue, in case of
+    searching in order not to call the function, a function pointer is returned else the function itself *)
 and find_llvalue_ptr name_sym current_depth info_tbl on_call = 
   let func_internal_error expected found =
     internal_error_of_msg_format None expected found "find_llvalue_ptr" (S.name name_sym)
@@ -353,6 +407,9 @@ and find_llvalue_ptr name_sym current_depth info_tbl on_call =
       | T.FUNC _ -> if on_call then L.build_load load_ptr "function_param_temp_load" builder else load_ptr
       | _ -> load_ptr
 
+(** [build_alloca_end_of_entry_block lltype name array_size_opt] allocates variable [name] of lltype [lltype]
+    at the end of current function's entry_block. In case of array allocation the option [array_size_opt] is 
+    provided *)
 and build_alloca_end_of_entry_block lltype name array_size_opt =
   let instr_of_option = function
     | None -> internal_error None "no instruction option specified in build_alloca_end_of_entry_block"
@@ -365,10 +422,17 @@ and build_alloca_end_of_entry_block lltype name array_size_opt =
   | None -> L.build_alloca lltype name entry_block_end_builder
   | Some array_size -> L.build_array_alloca lltype array_size name entry_block_end_builder
 
+(** [build_func_return ret_llvalue] generates ir for the return expression of current function, returning value [ret_llvalue] 
+    and pops it's function frame from [function_frames] *)
 and build_func_return ret_llvalue =
   ignore(L.build_ret ret_llvalue builder);
   ignore(function_frames_pop ())
 
+(** [build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt array_ptr_opt dims_len_llvalues] 
+    generates ir and builds the struct_ptr pointing to struct like {[array_ptr]; dim_llvalue1; dim_llvalue2; ...; dim_llvalueN}
+    having name [struct_ptr_name]. Parameters are options, which if provided they are assembled together and not generated from scratch.
+    [dims_len_llvalues] is a list of llvalues regarding dim sizes of the array pointed by array_ptr. [struct_ptr_ptr_opt] is an option
+    for struct_pointer_pointer, which if provided the struct_ptr_ptr is made to point to newly generated struct, else nothing happens *)
 and build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt array_ptr_opt dims_len_llvalues =
   let store_to_struct ll_struct index value =
     let ptr = L.build_struct_gep ll_struct index "temp_struct_store_ptr" builder in
@@ -422,6 +486,9 @@ and build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct
   List.iteri (fun i llv -> store_to_struct struct_ptr i llv) (array_ptr :: dims_len_llvalues);
   struct_ptr
 
+(** [build_equality_check is_struct p1_ll p2_ll] generates ir for the equality of llvalues
+    [p1_ll] and [p2_ll]. [is_struct], if true, refers to structural equality (=) else to 
+    natural equality (==) *)
 and build_equality_check is_struct p1_ll p2_ll = function
   | T.UNIT -> 
     const_bool true
@@ -445,6 +512,9 @@ and build_equality_check is_struct p1_ll p2_ll = function
   | _ as ty -> 
     internal_error None "unsupported type %s in equality check" (T.ty_to_string ty)
 
+(** [build_unary_operator name_sym param_exprs generate_ir_fun] generate ir for the unary_operator
+  with name in [name_sym] and single TA.expr in [param_exprs] provided the function to generate ir
+  for the param_expr [generate_ir_fun] *)
 and build_unary_operator name_sym param_exprs generate_ir_fun = 
   let op_name = S.name name_sym in
   let param_ll = match param_exprs with
@@ -457,11 +527,14 @@ and build_unary_operator name_sym param_exprs generate_ir_fun =
     | "( ~+ )" -> param_ll
     | "( ~- )" -> L.build_mul (const_int (-1)) param_ll "unary_int_neg_mul" builder
     | "( ~+. )" -> param_ll
-    | "( ~-. )" -> L.build_mul (const_float (-1.0)) param_ll "unary_float_neg_mul" builder
+    | "( ~-. )" -> L.build_fmul (const_float (-1.0)) param_ll "unary_float_neg_mul" builder
     | "( ! )" -> L.build_load param_ll "unary_ref" builder
     | "( not )" -> L.build_not param_ll "unary_not" builder
     | _ -> internal_error None "unsupported unary operator: %s" op_name
-  
+
+(** [build_binary_operator name_sym param_exprs generate_ir_fun] generate ir for the binary_operator
+  with name in [name_sym] and two TA.expr in [param_exprs] provided the function to generate ir
+  for the param_exprs [generate_ir_fun] *)
 and build_binary_operator name_sym param_exprs generate_ir_fun =
   let op_name = S.name name_sym in
   (* param2 to be generated on need, in order to support short-circuit behavior *)
@@ -575,6 +648,8 @@ and build_binary_operator name_sym param_exprs generate_ir_fun =
     | _ -> 
       internal_error None "unsupported binary operator: %s" op_name
 
+(** [create_named_type_structs_and_equality_fun tdec] fills the opaque types of the userdef struct type and
+    constructor struct types and creates the type equality function of TA.TypeDec [tdec] *)
 and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }) =
   let userdef_ty =  constrs |> List.hd |> userdef_ty_of_constr in
   let constr_lltypes = List.map (fun (TA.Constr { ty }) -> lltype_of_ty ty |> L.element_type) constrs in
@@ -726,7 +801,8 @@ let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: Esc.info_tbl_t): L.ll
   match LAN.verify_module the_module with
   | None -> the_module
   | Some reason -> pprint the_module; internal_error None "Verification error: %s" reason
-  
+
+(** [generate_ir_def depth info_tbl def] generates ir for the given TA.def [def] in current_depth [depth], with [info_tbl] *)
 and generate_ir_def depth info_tbl = function
   | TA.LetDefNonRec { decs } ->
     List.iter (generate_ir_dec depth info_tbl) decs
@@ -752,6 +828,7 @@ and generate_ir_def depth info_tbl = function
     List.iter ensure_declared_userdef_type tdecs; (* decalare non-yet-declared custom types *)
     List.iter create_named_type_structs_and_equality_fun tdecs (* create struct types for opaque declared userdef type and constructor types *)
 
+(** [generate_ir_dec depth info_tbl dec] generates ir for the given TA.dec [dec] in current_depth [depth], with [info_tbl] *)
 and generate_ir_dec depth info_tbl = function
   | TA.ConstVarDec { name_sym; value } ->
     let llvalue = generate_ir_expr depth info_tbl value in
@@ -760,7 +837,7 @@ and generate_ir_dec depth info_tbl = function
   | TA.FunctionDec { ty; name_sym; params; body } ->
     let current_block = L.insertion_block builder in
     build_func_frame_vars name_sym ty info_tbl;
-    List.iteri (generate_ir_param name_sym info_tbl depth) params;
+    List.iteri (generate_ir_param name_sym depth info_tbl) params;
     let ret_llvalue = generate_ir_expr (depth + 1) info_tbl body in
     build_func_return ret_llvalue;
     L.position_at_end current_block builder
@@ -774,13 +851,17 @@ and generate_ir_dec depth info_tbl = function
     let struct_ptr_name = (S.name name_sym) ^ "_alloca_ptr" in
     let dims_len_llvalues = List.map (generate_ir_expr depth info_tbl) dims_len_exprs in
     ignore(build_array_struct struct_ptr_name struct_ptr_llty (Some struct_ptr_ptr) None None dims_len_llvalues)
-    
-and generate_ir_param func_name_sym info_tbl depth param_index (Param { name_sym }) =
+
+(** [generate_ir_param depth info_tbl param_index param] generates ir for the given TA.param [param] of function with symbol [func_sym],
+    having param index [param_index] in current_depth [depth], with [info_tbl] *)
+and generate_ir_param func_name_sym depth info_tbl param_index (Param { name_sym }) =
   let func = find_function_in_module (S.name func_name_sym) in
   let param_llvalue_ptr = find_llvalue_ptr name_sym depth info_tbl false in
   let param_llvalue = L.param func param_index in
   ignore(L.build_store param_llvalue param_llvalue_ptr builder)
 
+(** [generate_ir_expr depth info_tbl expr] generates ir for the given TA.expr [expr] in current_depth [depth], with [info_tbl]
+    and returns the generated llvalue of the expression *)
 and generate_ir_expr depth info_tbl expr: L.llvalue =
   let rec generate_ir_expr_aux = function
   | TA.E_ID  { ty; name_sym } ->
@@ -1088,90 +1169,90 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     L.position_at_end match_finished_block builder;
     L.build_phi value_block_phi_pairs "temp_match_phi" builder
 
-and generate_ir_clause match_llvalue match_finished_block (idx_str, match_check_block, next_match_check_block) = function
-  | TA.BasePattClause { base_pattern; expr; loc } ->
-    (* build basic blocks match_success *)
-    let match_success_block = L.insert_block ctx ("match_success_" ^ idx_str) next_match_check_block in
-    
-    (* check if base_pattern matches expression and branch accordingly *)
-    L.position_at_end match_check_block builder;
-    let success_match_llvalue = generate_ir_base_pattern match_llvalue base_pattern in
-    ignore(L.build_cond_br success_match_llvalue match_success_block next_match_check_block builder);
+  and generate_ir_clause match_llvalue match_finished_block (idx_str, match_check_block, next_match_check_block) = function
+    | TA.BasePattClause { base_pattern; expr; loc } ->
+      (* build basic blocks match_success *)
+      let match_success_block = L.insert_block ctx ("match_success_" ^ idx_str) next_match_check_block in
+      
+      (* check if base_pattern matches expression and branch accordingly *)
+      L.position_at_end match_check_block builder;
+      let success_match_llvalue = generate_ir_base_pattern match_llvalue base_pattern in
+      ignore(L.build_cond_br success_match_llvalue match_success_block next_match_check_block builder);
 
-    (* fill success block *)
-    L.position_at_end match_success_block builder;
-    let success_llvalue = generate_ir_expr_aux expr in
-    (* block might have changed *)
-    let end_of_success_block = builder |> L.insertion_block in
-    ignore(L.build_br match_finished_block builder);
+      (* fill success block *)
+      L.position_at_end match_success_block builder;
+      let success_llvalue = generate_ir_expr_aux expr in
+      (* block might have changed *)
+      let end_of_success_block = builder |> L.insertion_block in
+      ignore(L.build_br match_finished_block builder);
 
-    (* return phi pair *)
-    success_llvalue, end_of_success_block
-  | TA.ConstrPattClause { constr_pattern; expr; loc } ->
-    (* build basic blocks match_param_check and match_success *)
-    let match_param_check_block = L.insert_block ctx ("match_param_check_" ^ idx_str) next_match_check_block in
-    let match_success_block = L.insert_block ctx ("match_success_" ^ idx_str) next_match_check_block in
+      (* return phi pair *)
+      success_llvalue, end_of_success_block
+    | TA.ConstrPattClause { constr_pattern; expr; loc } ->
+      (* build basic blocks match_param_check and match_success *)
+      let match_param_check_block = L.insert_block ctx ("match_param_check_" ^ idx_str) next_match_check_block in
+      let match_success_block = L.insert_block ctx ("match_success_" ^ idx_str) next_match_check_block in
 
-    (* check if constr_pattern matches expression and branch accordingly *)
-    L.position_at_end match_check_block builder;
-    let success_match_llvalue = generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block constr_pattern in
-    ignore(L.build_cond_br success_match_llvalue match_success_block next_match_check_block builder);
+      (* check if constr_pattern matches expression and branch accordingly *)
+      L.position_at_end match_check_block builder;
+      let success_match_llvalue = generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block constr_pattern in
+      ignore(L.build_cond_br success_match_llvalue match_success_block next_match_check_block builder);
 
-    (* fill success block *)
-    L.position_at_end match_success_block builder;
-    let success_llvalue = generate_ir_expr_aux expr in
-    (* block might have changed *)
-    let end_of_success_block = builder |> L.insertion_block in
-    ignore(L.build_br match_finished_block builder);
-    
-    (* return phi pair*)
-    success_llvalue, end_of_success_block
+      (* fill success block *)
+      L.position_at_end match_success_block builder;
+      let success_llvalue = generate_ir_expr_aux expr in
+      (* block might have changed *)
+      let end_of_success_block = builder |> L.insertion_block in
+      ignore(L.build_br match_finished_block builder);
+      
+      (* return phi pair*)
+      success_llvalue, end_of_success_block
 
-and generate_ir_base_pattern match_llvalue = function
-  | TA.BP_INT { num } -> 
-    L.build_icmp L.Icmp.Eq (const_int num) match_llvalue "pattern_comp" builder
-  | TA.BP_FLOAT { num } -> 
-    L.build_fcmp L.Fcmp.True (const_float num) match_llvalue "pattern_comp" builder
-  | TA.BP_CHAR { chr } -> 
-    L.build_icmp L.Icmp.Eq (const_char (int_of_char chr)) match_llvalue "pattern_comp" builder
-  | TA.BP_BOOL { value } -> 
-    L.build_icmp L.Icmp.Eq (const_bool value) match_llvalue "pattern_comp" builder
-  | TA.BP_ID { name_sym; loc } ->
-    let id_ptr = find_llvalue_ptr name_sym depth info_tbl false in
-    ignore(L.build_store match_llvalue id_ptr builder);
-    const_bool true
+  and generate_ir_base_pattern match_llvalue = function
+    | TA.BP_INT { num } -> 
+      L.build_icmp L.Icmp.Eq (const_int num) match_llvalue "pattern_comp" builder
+    | TA.BP_FLOAT { num } -> 
+      L.build_fcmp L.Fcmp.True (const_float num) match_llvalue "pattern_comp" builder
+    | TA.BP_CHAR { chr } -> 
+      L.build_icmp L.Icmp.Eq (const_char (int_of_char chr)) match_llvalue "pattern_comp" builder
+    | TA.BP_BOOL { value } -> 
+      L.build_icmp L.Icmp.Eq (const_bool value) match_llvalue "pattern_comp" builder
+    | TA.BP_ID { name_sym; loc } ->
+      let id_ptr = find_llvalue_ptr name_sym depth info_tbl false in
+      ignore(L.build_store match_llvalue id_ptr builder);
+      const_bool true
 
-and generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block (TA.CP_BASIC { ty; constr_sym; base_patterns; loc }) =
-    let llname = llname_constr_of_constr_info constr_sym ty in
-    let tag, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
-      | Some (tag, lltype) -> tag, lltype
-      | None -> internal_error_of_msg_format (Some loc) "Some (tag, lltype)" "None" "constr_info_tbl" "pair"
-    in
+  and generate_ir_constr_pattern match_llvalue match_param_check_block next_match_check_block (TA.CP_BASIC { ty; constr_sym; base_patterns; loc }) =
+      let llname = llname_constr_of_constr_info constr_sym ty in
+      let tag, constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl llname with
+        | Some (tag, lltype) -> tag, lltype
+        | None -> internal_error_of_msg_format (Some loc) "Some (tag, lltype)" "None" "constr_info_tbl" "pair"
+      in
 
-    (* check whether tags are equal *)
-    let match_tag_ptr = L.build_struct_gep match_llvalue 0 "match_tag_ptr" builder in
-    let match_tag = L.build_load match_tag_ptr "match_tag_load" builder in
-    let match_cond = L.build_icmp L.Icmp.Eq (const_int tag) match_tag "tag_comp" builder in
-    ignore(L.build_cond_br match_cond match_param_check_block next_match_check_block builder);
+      (* check whether tags are equal *)
+      let match_tag_ptr = L.build_struct_gep match_llvalue 0 "match_tag_ptr" builder in
+      let match_tag = L.build_load match_tag_ptr "match_tag_load" builder in
+      let match_cond = L.build_icmp L.Icmp.Eq (const_int tag) match_tag "tag_comp" builder in
+      ignore(L.build_cond_br match_cond match_param_check_block next_match_check_block builder);
 
-    (* fill match_param_check_block *)
-    L.position_at_end match_param_check_block builder;
+      (* fill match_param_check_block *)
+      L.position_at_end match_param_check_block builder;
 
-    (* cast userdef_struct pointer to specific constr struct pointer *)
-    let match_constr_struct = L.build_pointercast match_llvalue constr_struct_pointer_lltype "matched_type_to_constr_cast" builder in
+      (* cast userdef_struct pointer to specific constr struct pointer *)
+      let match_constr_struct = L.build_pointercast match_llvalue constr_struct_pointer_lltype "matched_type_to_constr_cast" builder in
 
-    (* create list with match_llvalues of constructor params *)
-    let load_from_constr_struct idx =
-      let ptr = L.build_struct_gep match_constr_struct idx "temp_match_constr_param_load_ptr" builder in
-      L.build_load ptr "temp_match_constr_param_load" builder
-    in
-    (* create and of all constructor params matches *)
-    let create_and prev_and match_llvalue base_pattern = 
-      let curr_cond = generate_ir_base_pattern match_llvalue base_pattern in
-      L.build_and prev_and curr_cond "temp_constr_param_and" builder
-    in
-    let constr_params_of_match_llvalue = List.mapi (fun i _ -> load_from_constr_struct (i + 1)) base_patterns in
-    (* return single condition of successful match or not *)
-    List.fold_left2 create_and (const_bool true) constr_params_of_match_llvalue base_patterns
+      (* create list with match_llvalues of constructor params *)
+      let load_from_constr_struct idx =
+        let ptr = L.build_struct_gep match_constr_struct idx "temp_match_constr_param_load_ptr" builder in
+        L.build_load ptr "temp_match_constr_param_load" builder
+      in
+      (* create and of all constructor params matches *)
+      let create_and prev_and match_llvalue base_pattern = 
+        let curr_cond = generate_ir_base_pattern match_llvalue base_pattern in
+        L.build_and prev_and curr_cond "temp_constr_param_and" builder
+      in
+      let constr_params_of_match_llvalue = List.mapi (fun i _ -> load_from_constr_struct (i + 1)) base_patterns in
+      (* return single condition of successful match or not *)
+      List.fold_left2 create_and (const_bool true) constr_params_of_match_llvalue base_patterns
   in
   generate_ir_expr_aux expr

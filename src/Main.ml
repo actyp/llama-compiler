@@ -7,8 +7,8 @@ let llc_exe = "llc"
 (** clang exetutable *)
 and clang_exe = "clang"
 
-(** runtime external functions file *)
-and ext_funs_c_file = "src/runtime/external_functions.c"
+(** runtime library file *)
+and liblla_file = "src/runtime/liblla.a"
 
 (** Variable for input file *)
 let filename = ref ""
@@ -138,8 +138,8 @@ let gen_asm in_ch optmz to_stdout_only =
   end
   else begin
     let exe_filename = filename_without_extension ^ ".out" in
-    (* -lm is the link to math library 'libm' used by external functions *)
-    let to_exe_cmd = Printf.sprintf "%s -o %s %s %s -lm" clang_exe exe_filename asm_filename ext_funs_c_file in
+    (* -lm is the link to math library 'libm' used by liblla.a file *)
+    let to_exe_cmd = Printf.sprintf "%s -o %s %s %s -lm" clang_exe exe_filename asm_filename liblla_file in
     exec_and_check_cmd to_exe_cmd
   end
 
