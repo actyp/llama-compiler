@@ -40,17 +40,6 @@ let tbl_add tbl key entry = H.replace tbl key entry
 (** [tbl_find_opt tbl key] returns an option of the mapping of [key] in hashtbl [tbl] *)
 and tbl_find_opt tbl key = H.find_opt tbl key
 
-(** [function_frames] is the stack holding the llvalues of function frames *)
-let rec function_frames = Stack.create()
-(** [function_frames_push frame] pushes the [frame] on top of [function_frames] *)
-and function_frames_push frame = Stack.push frame function_frames
-(** [function_frames_pop] pops the [frame] on top of [function_frames] *)
-and function_frames_pop () = Stack.pop function_frames
-(** [function_frames_top] returns the [frame] on top of [function_frames] without removing it *)
-and function_frames_top () = Stack.top function_frames
-(** [function_frames_is_empty] returns whether [function_frames] is an empty stack or not *)
-and function_frames_is_empty () = Stack.is_empty function_frames
-
 let pprint_to_file (filename: string) (llmodule: L.llmodule): unit = L.print_module filename llmodule
 
 let pprint (llmodule: L.llmodule): unit = pprint_to_file "-" llmodule
@@ -100,6 +89,7 @@ and char_type = L.integer_type ctx 8
 and bool_type = L.integer_type ctx 1
 and float_type = L.float_type ctx
 and struct_type = L.struct_type ctx
+and generic_pointer_type = L.pointer_type (L.integer_type ctx 8)
 
 (* llvm const_type functions *)
 let const_int i = L.const_int int_type i
@@ -140,6 +130,57 @@ let get_or_build_global_string_pointer string_value =
     let string_ptr = L.build_global_stringptr string_value "str" builder in
     tbl_add global_str_tbl string_value string_ptr;
     string_ptr
+
+(** [frame_types_display_array] is a reference to an array holding the runtime 
+    specific frame types, with respect to display array struct in order to obtain
+    and cast the generic frame pointers from display array *)
+let frame_types_display_array: (L.lltype array) ref = ref [||]
+
+(** [build_display_array info_tbl] initializes [display array] struct and [frame_types_display_array] 
+    with size equal to the max declaration depth of the functions in [info_tbl]. Display array struct
+    is an array of generic frame pointers. On function call, the called function saves the old frame
+    pointer at index equal to it's declaration depth, stores it's frame pointer -- casted to i8* --
+    and on return restores the old generic frame pointer *)
+let build_display_array info_tbl =
+  let max_func_dec_depth = 
+    let max_dec_depth = ref 0 in
+    let update_max_of_pair _ = function
+      | Esc.LocalVarInfo _ | Esc.EscVarInfo _ -> ()
+      | Esc.FuncInfo { dec_depth } -> if dec_depth > !max_dec_depth then max_dec_depth := dec_depth
+    in
+    H.iter update_max_of_pair info_tbl;
+    !max_dec_depth + 1
+  in
+  (* fill frame_types array with dummy type *)
+  frame_types_display_array := Array.make max_func_dec_depth unit_type;
+  let array_lltype = L.array_type generic_pointer_type max_func_dec_depth in
+  ignore(L.define_global "display_array" (L.const_null array_lltype) the_module)
+
+(** [load_from_display_array index] returns a generic frame pointer from display array at index [index].
+    The user of this function is responsible to obtain the specific frame pointer type and cast the
+    returned pointer accordingly, if needed *)
+let load_from_display_array index =
+  let display_array = match L.lookup_global "display_array" the_module with
+    | None -> internal_error None "display array undefined in load_from_display_array"
+    | Some llvalue -> llvalue
+  in
+  let elem_ptr = L.build_gep display_array [| const_int 0; const_int index |] "temp_display_array_element_gep" builder in
+  L.build_load elem_ptr "display_array_ptr_load" builder
+
+(** [store_to_display_array index frame_ptr] returns unit and stores to [frame_types_display_array] 
+    the specific type of [frame_ptr] and then after casting the [frame_ptr] to i8* it stores it to
+    display_array at index [index]. The user of this function is responsible to obtain the save the
+    previous generic frame_ptr in display_array at index [index], in order to restore it later *)
+let store_to_display_array index frame_ptr =
+  (* update frame types *)
+  Array.set !frame_types_display_array index (L.type_of frame_ptr);
+  let display_array = match L.lookup_global "display_array" the_module with
+    | None -> internal_error None "display array undefined in store_to_display_array"
+    | Some llvalue -> llvalue
+  in
+  let elem_ptr = L.build_gep display_array [| const_int 0; const_int index |] "temp_display_array_element_gep" builder in
+  let casted_frame_ptr = L.build_bitcast frame_ptr generic_pointer_type "casted_elem_frame_ptr" builder in
+  ignore(L.build_store casted_frame_ptr elem_ptr builder)
 
 (** [llname_userdef_of_userdef_ty ty] returns the full name of userdef type [ty], which is 'name:occ_num' *)
 let rec llname_userdef_of_userdef_ty = function
@@ -322,21 +363,21 @@ and build_func_frame_vars name_sym func_ty info_tbl =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "build_func_frame_vars" (S.name name_sym)
   in
-  let local_list, esc_list = match Esc.tbl_find_opt info_tbl name_sym with
+  let func_dec_depth, local_list, esc_list = match Esc.tbl_find_opt info_tbl name_sym with
     | None -> func_internal_error "function" "None" name_sym
     | Some Esc.LocalVarInfo _ -> func_internal_error "function" "LocalVarInfo" name_sym
     | Some Esc.EscVarInfo _ -> func_internal_error "function" "EscVarInfo" name_sym
-    | Some Esc.FuncInfo { local_list; esc_list } -> local_list, esc_list
+    | Some Esc.FuncInfo { dec_depth; local_list; esc_list } -> dec_depth, local_list, esc_list
   in
   let build_frame_alloc esc_list =
+    let prev_frame_ptr = load_from_display_array func_dec_depth in
     let esc_list_lltypes = List.map (fun (_, ty) -> lltype_of_ty ty) esc_list in
-    let parent_struct_ptr_type = if function_frames_is_empty () 
-      then L.pointer_type bool_type 
-      else L.type_of (function_frames_top ()) (* stored ptr is already a pointer*) in
-    let frame_type = struct_type (Array.of_list (parent_struct_ptr_type :: esc_list_lltypes)) in
-    let frame_ptr = L.build_alloca frame_type (S.name name_sym ^ ":frame") builder in
-    function_frames_push frame_ptr;
-    frame_ptr
+    (* allocate new frame *)
+    let frame_type = struct_type (Array.of_list esc_list_lltypes) in
+    let frame_ptr = L.build_alloca frame_type (S.name name_sym ^ ":frame_ptr") builder in
+    (* store frame_ptr to display array *)
+    store_to_display_array func_dec_depth frame_ptr;
+    prev_frame_ptr
   in
   let add_llvalue_of_local_var name_sym llvalue = match Esc.tbl_find_opt info_tbl name_sym with
     | None -> func_internal_error "local" "None" name_sym
@@ -359,10 +400,11 @@ and build_func_frame_vars name_sym func_ty info_tbl =
   let entry_block = L.append_block ctx "entry" func in
   let body_block = L.append_block ctx "body" func in
   L.position_at_end entry_block builder;
-  ignore(build_frame_alloc esc_list);
+  let prev_frame_ptr = build_frame_alloc esc_list in
   alloc_locals local_list;
   ignore(L.build_br body_block builder);
-  ignore(L.position_at_end body_block builder)
+  ignore(L.position_at_end body_block builder);
+  func_dec_depth, prev_frame_ptr
 
 (** [find_llvalue_ptr name_sym current_depth info_tbl on_call] searches in [info_tbl] to find the llvalue
     of the varible with name from [name_sym]. [current_depth] is used in case of escaping variable to 
@@ -372,22 +414,16 @@ and find_llvalue_ptr name_sym current_depth info_tbl on_call =
   let func_internal_error expected found =
     internal_error_of_msg_format None expected found "find_llvalue_ptr" (S.name name_sym)
   in
-  let rec find_declaration_frame current_frame curr_depth dec_depth =
-    if curr_depth - dec_depth <= 0
-    then current_frame
-    else begin
-      let parent_frame_ptr = L.build_struct_gep current_frame 0 "parent_frame_ptr" builder in
-      let parent_frame = L.build_load parent_frame_ptr "parent_frame_temp_load" builder in
-      find_declaration_frame parent_frame (curr_depth - 1) dec_depth
-    end
+  let rec find_declaration_frame_ptr dec_depth =
+    let parent_depth = dec_depth - 1 in
+    let generic_frame_ptr = load_from_display_array parent_depth in
+    let frame_type = Array.get !frame_types_display_array parent_depth in
+    L.build_bitcast generic_frame_ptr frame_type "casted_frame_ptr" builder
   in
   match Esc.tbl_find_opt info_tbl name_sym with
   | None -> func_internal_error "var" "None"
   | Some Esc.FuncInfo _ ->
     find_function_in_module (S.name name_sym)
-    (*(* Higher-order functions are allowed only to take other functions as parameters. These
-       function parameters are pointers to functions being called, so we load those functions *)
-    L.build_load func_ptr "function_param_temp_load" builder*)
   | Some Esc.LocalVarInfo { ty; llvalue_opt } ->
     (* assuming info_tbl is correct, a local is found only in local scope while parsing *)
     begin match llvalue_opt with
@@ -399,9 +435,8 @@ and find_llvalue_ptr name_sym current_depth info_tbl on_call =
     end
   | Some Esc.EscVarInfo { ty; dec_depth; frame_offset } ->
     let name = S.name name_sym in
-    let current_frame = function_frames_top () in
-    let declaration_frame = find_declaration_frame current_frame current_depth dec_depth in
-    let load_ptr = L.build_struct_gep declaration_frame (1 + frame_offset) (name ^ ":temp_gep") builder in
+    let dec_frame_ptr = find_declaration_frame_ptr dec_depth in
+    let load_ptr = L.build_struct_gep dec_frame_ptr frame_offset (name ^ ":temp_gep") builder in
     match ty with
       (* load_ptr is function pointer so if on_call load function else return function pointer *)
       | T.FUNC _ -> if on_call then L.build_load load_ptr "function_param_temp_load" builder else load_ptr
@@ -424,9 +459,10 @@ and build_alloca_end_of_entry_block lltype name array_size_opt =
 
 (** [build_func_return ret_llvalue] generates ir for the return expression of current function, returning value [ret_llvalue] 
     and pops it's function frame from [function_frames] *)
-and build_func_return ret_llvalue =
-  ignore(L.build_ret ret_llvalue builder);
-  ignore(function_frames_pop ())
+and build_func_return (func_dec_depth, prev_frame_ptr) ret_llvalue =
+  store_to_display_array func_dec_depth prev_frame_ptr;
+  ignore(L.build_ret ret_llvalue builder)
+  
 
 (** [build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt array_ptr_opt dims_len_llvalues] 
     generates ir and builds the struct_ptr pointing to struct like {[array_ptr]; dim_llvalue1; dim_llvalue2; ...; dim_llvalueN}
@@ -668,7 +704,8 @@ and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }
       let struct_name = llname_constr_of_constr_info name_sym userdef_ty in
       let struct_lltype = L.named_struct_type ctx struct_name in
       L.struct_set_body struct_lltype (L.struct_element_types lltype) false;
-      tbl_add constr_info_tbl struct_name (index, L.pointer_type struct_lltype)
+      (* tag == index + 1, because index is zero-based and tag is not *)
+      tbl_add constr_info_tbl struct_name (index + 1, L.pointer_type struct_lltype)
     in
     List.iter2 create_constr_named_struct_type constrs constr_lltypes
   
@@ -720,7 +757,8 @@ and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }
 
       (* create case block and add switch case *)
       let case_block = L.insert_block ctx ("case_" ^ constr_name) error_block in
-      L.add_case switch (const_int index) case_block;
+      let tag_llvalue = const_int (index + 1) in
+      L.add_case switch tag_llvalue case_block;
       
       (* fill case block *)
       L.position_at_end case_block builder;
@@ -779,15 +817,16 @@ and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }
   build_equality_fun ()
 
 let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: Esc.info_tbl_t): L.llmodule =
+  build_display_array info_tbl;
   declare_external_functions ();
   build_utility_funs ();
 
-  build_func_frame_vars ("main", 0) (T.FUNC ([], T.INT)) info_tbl;
+  let prev_frame_info = build_func_frame_vars ("main", 0) (T.FUNC ([], T.INT)) info_tbl in
 
   let init_depth = 0 in
   List.iter (generate_ir_def (init_depth + 1) info_tbl) tast;
   
-  build_func_return (const_int 0);
+  build_func_return prev_frame_info (const_int 0);
 
   (* check for optimizations *)
   let _ = if opt then begin
@@ -836,15 +875,17 @@ and generate_ir_dec depth info_tbl = function
     ignore(L.build_store llvalue llvalue_ptr builder)
   | TA.FunctionDec { ty; name_sym; params; body } ->
     let current_block = L.insertion_block builder in
-    build_func_frame_vars name_sym ty info_tbl;
+    let prev_frame_info = build_func_frame_vars name_sym ty info_tbl in
     List.iteri (generate_ir_param name_sym depth info_tbl) params;
     let ret_llvalue = generate_ir_expr (depth + 1) info_tbl body in
-    build_func_return ret_llvalue;
+    build_func_return prev_frame_info ret_llvalue;
     L.position_at_end current_block builder
   | TA.MutVarDec { ty; name_sym } ->
-    let llvalue = L.const_null (lltype_of_ty ty) in
-    let llvalue_ptr = find_llvalue_ptr name_sym depth info_tbl false in
-    ignore(L.build_store llvalue llvalue_ptr builder)
+    let lltype = lltype_of_ty ty |> L.element_type in
+    let llvalue_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
+    let llvalue_ptr_name = (S.name name_sym) ^ "_alloca_ptr" in
+    let llvalue_ptr = build_alloca_end_of_entry_block lltype llvalue_ptr_name None in
+    ignore(L.build_store llvalue_ptr llvalue_ptr_ptr builder)
   | TA.ArrayDec { ty; name_sym; dims_len_exprs } ->
     let struct_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
     let struct_ptr_llty = (lltype_of_ty ty) in
@@ -949,7 +990,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let struct_ptr = L.build_load struct_ptr_ptr "array_struct_alloca_ptr_load" builder in
 
     (* remove first element which is array pointer *)
-    let dimNum = struct_ptr |> L.type_of |> L.struct_element_types |> Array.length |> fun d -> d - 1 in
+    let dimNum = struct_ptr |> L.type_of |> L.element_type |> L.struct_element_types |> Array.length |> fun d -> d - 1 in
 
     if dim < 1 || dim > dimNum
       then begin
@@ -962,11 +1003,13 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
         let dim_ptr = L.build_struct_gep struct_ptr dim "temp_struct_dim_ptr" builder in
         L.build_load dim_ptr "temp_struct_dim_load" builder
   | TA.E_New { ty } ->
-    let malloc_ptr = L.build_malloc (lltype_of_ty ty) "temp_malloc_for_new" builder in
-    L.build_load malloc_ptr "temp_malloc_load_for_new" builder
+    (* allocate to heap a struct_ptr -- then this points to stack allocated structs *)
+    let struct_ptr_lltype = lltype_of_ty ty |> L.element_type in
+    L.build_malloc struct_ptr_lltype "temp_malloc_for_new" builder
   | TA.E_Delete { expr } ->
-    let llvalue = generate_ir_expr_aux expr in
-    ignore(L.build_free llvalue builder);
+    (* provide a pointer to heap allocated struct_ptr *)
+    let struct_ptr_ptr = generate_ir_expr_aux expr in
+    ignore(L.build_free struct_ptr_ptr builder);
     unit_value
   | TA.E_FuncCall { ty; name_sym; param_exprs } ->
     if is_unary_operator (S.name name_sym) 
@@ -987,31 +1030,27 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     in
 
     (* allocate userdef struct *)
-    let userdef_struct = build_alloca_end_of_entry_block userdef_struct_lltype ("temp_userdef_type:" ^ (S.name name_sym)) None in
+    let userdef_struct_ptr = build_alloca_end_of_entry_block userdef_struct_lltype ("userdef_struct_ptr:" ^ (S.name name_sym)) None in
     
     (* store tag *)
-    let tag_ptr = L.build_struct_gep userdef_struct 0 "userdef_struct_tag_ptr" builder in
+    let tag_ptr = L.build_struct_gep userdef_struct_ptr 0 "userdef_struct_tag_ptr" builder in
     ignore(L.build_store (const_int tag) tag_ptr builder);
 
     if List.length param_exprs > 0 then begin
-      (* allocate userdef struct pointer and store userdef struct *)
-      let userdef_struct_pointer = build_alloca_end_of_entry_block userdef_struct_pointer_lltype ("temp_userdef_pointer_type:" ^ (S.name name_sym)) None in
-      ignore(L.build_store userdef_struct userdef_struct_pointer builder);
-
       (* cast userdef_struct pointer to specific constr struct pointer *)
-      let constr_struct = L.build_pointercast userdef_struct_pointer constr_struct_pointer_lltype "userdef_to_constr_cast" builder in
+      let constr_struct_ptr = L.build_pointercast userdef_struct_ptr constr_struct_pointer_lltype "constr_struct_ptr" builder in
 
       (* store all other parameters to constr_struct *)
       let param_llvalues = List.map generate_ir_expr_aux param_exprs in
       let store_to_constr_struct idx value =
-        let ptr = L.build_struct_gep constr_struct idx "temp_constr_struct_store_ptr" builder in
+        let ptr = L.build_struct_gep constr_struct_ptr idx "temp_constr_struct_store_ptr" builder in
         ignore(L.build_store value ptr builder)
       in
       List.iteri (fun idx llvalue -> store_to_constr_struct (idx + 1) llvalue) param_llvalues
     end;
 
-    (* return the userdef struct *)
-    userdef_struct
+    (* return the userdef struct alloca pointer *)
+    userdef_struct_ptr
   | TA.E_LetIn { letdef; in_expr} ->
     generate_ir_def depth info_tbl letdef;
     generate_ir_expr depth info_tbl in_expr
@@ -1212,7 +1251,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     | TA.BP_INT { num } -> 
       L.build_icmp L.Icmp.Eq (const_int num) match_llvalue "pattern_comp" builder
     | TA.BP_FLOAT { num } -> 
-      L.build_fcmp L.Fcmp.True (const_float num) match_llvalue "pattern_comp" builder
+      L.build_fcmp L.Fcmp.Oeq (const_float num) match_llvalue "pattern_comp" builder
     | TA.BP_CHAR { chr } -> 
       L.build_icmp L.Icmp.Eq (const_char (int_of_char chr)) match_llvalue "pattern_comp" builder
     | TA.BP_BOOL { value } -> 
