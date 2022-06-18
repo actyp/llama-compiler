@@ -242,7 +242,7 @@ let rec lltype_of_ty: T.ty -> L.lltype = function
        following on the implementation of tagged union *)
     let param_lltypes = List.map lltype_of_ty param_tys in
     struct_type (Array.of_list (int_type :: param_lltypes)) |> L.pointer_type
-  | T.VAR _ -> bool_type
+  | T.VAR _ -> unit_type
   | T.POLY _ -> internal_error None "poly type encountered in lltype_of_ty"
 
 (** [declare_external_functions ()] iterates and declares the external functions Env.external_functions *)
@@ -269,17 +269,64 @@ and declare_function name_sym func_ty =
   let func = L.declare_function (S.name name_sym) func_type the_module in
   func
 
-(** [build_utility_funs ()] builds some utility functions: _runtime_error, _binary_int_division, _binary_float_division *)
+(** [build_utility_funs ()] builds some utility functions, specifically
+    - declares: GC_init, GC_malloc, GC_register_finalizer
+    - defines: _free_array_of_malloc, _runtime_error, _binary_int_division, _binary_float_division *)
 and build_utility_funs () =
+  let void_type = L.void_type ctx
+  in
+  let declare_garbage_collection_funs () =  
+    (* declare GC_init *)
+    let func_lltype = L.function_type generic_pointer_type [| |] in
+    ignore(L.declare_function "GC_init" func_lltype the_module);
+
+    (* declare GC_malloc *)
+    let func_lltype = L.function_type generic_pointer_type [| int_type |] in
+    ignore(L.declare_function "GC_malloc" func_lltype the_module);
+
+    (* declare GC_register_finalizer *)
+    let func_ptr_type = L.function_type void_type [| generic_pointer_type; generic_pointer_type |] |> L.pointer_type in
+    let func_params =
+      [|
+        generic_pointer_type; (* object pointer -- obj_ptr *)
+        func_ptr_type; (* register function to use f(obj_ptr, cd_ptr) *)
+        generic_pointer_type; (* cd pointer -- cd_ptr -- may be NULL *)
+        L.pointer_type func_ptr_type; (* pointer to old func pointer -- may be NULL *)
+        L.pointer_type generic_pointer_type (* pointer to old cd pointer -- may be NULL *)
+      |]
+    in
+    let func_lltype = L.function_type void_type func_params in
+    ignore(L.declare_function "GC_register_finalizer" func_lltype the_module)
+  in
+  let build_free_array_of_malloc_fun () = 
+    (* declare function *)
+    let func_name = "_free_array_of_malloc" in
+    let func_lltype = L.function_type void_type [| generic_pointer_type; generic_pointer_type |] in
+    let func = L.declare_function func_name func_lltype the_module in
+
+    (* create basic_block entry *)
+    let entry_block = L.append_block ctx "entry" func in
+
+    (* take first param -- uncasted array_struct_ptr *)
+    let generic_ptr = L.param func 0 in
+    let cast_type = struct_type [| generic_pointer_type; int_type |] |> L.pointer_type in
+
+    (* fill entry_block *)
+    L.position_at_end entry_block builder;
+    let array_struct_ptr = L.build_bitcast generic_ptr cast_type "array_struct_ptr" builder in
+    let malloc_array_ptr_gep = L.build_struct_gep array_struct_ptr 0 "malloc_array_ptr_gep" builder in
+    let malloc_array_ptr = L.build_load malloc_array_ptr_gep "malloc_array_ptr" builder in
+    ignore(L.build_free malloc_array_ptr builder);
+    ignore(L.build_ret_void builder)
+  in
   let build_runtime_error_fun () =
     (* declare function *)
     let func_name = "_runtime_error" in
-    let func_lltype = L.function_type unit_type [| L.pointer_type char_type; int_type |] in
+    let func_lltype = L.function_type void_type [| L.pointer_type char_type; int_type |] in
     let func = L.declare_function func_name func_lltype the_module in
 
-    (* create basic_blocks entry, body *)
+    (* create basic_block entry *)
     let entry_block = L.append_block ctx "entry" func in
-    let body_block = L.append_block ctx "body" func in
 
     (* take params *)
     let array_ptr = L.param func 0 in
@@ -287,22 +334,17 @@ and build_utility_funs () =
 
     (* fill entry_block *)
     L.position_at_end entry_block builder;
-    ignore(L.build_br body_block builder);
-
-    (* fill body_block *)
-    L.position_at_end body_block builder;
-
     (* build array struct *)
     let struct_ptr_llty = lltype_of_ty Env.array_of_char_ty in
-    let struct_ptr = build_array_struct "runtime_error_array_struct" struct_ptr_llty None None (Some array_ptr) [array_size] in
+    let struct_ptr = build_array_struct "array_struct_ptr" struct_ptr_llty None None (Some array_ptr) [array_size] in
     
     (* build error code *)
     let error_code = const_int 1 in
 
     (* find and call external function 'lla_exit_with_error_call' *)
     let func = find_function_in_module "lla_exit_with_error" in
-    let ret = L.build_call func [| struct_ptr; error_code |] "lla_exit_with_error_call" builder in
-    ignore(L.build_ret ret builder);
+    ignore(L.build_call func [| struct_ptr; error_code |] "lla_exit_with_error_call" builder);
+    ignore(L.build_ret_void builder)
   in
   let build_division_fun name_sym elem_type ll_cmp_fun ll_div_fun = 
     (* declare function *)
@@ -331,8 +373,10 @@ and build_utility_funs () =
     (* fill body block *)
     L.position_at_end body_block builder;
     let ret = ll_div_fun param1 param2 "division" builder in
-    ignore(L.build_ret ret builder);
+    ignore(L.build_ret ret builder)
   in
+  declare_garbage_collection_funs ();
+  build_free_array_of_malloc_fun ();
   build_runtime_error_fun ();
   build_division_fun ("_binary_int_division", 0) int_type (L.build_icmp L.Icmp.Eq (const_int 0)) L.build_sdiv;
   build_division_fun ("_binary_float_division", 0)  float_type (L.build_fcmp L.Fcmp.Oeq (const_float 0.0)) L.build_fdiv
@@ -347,7 +391,7 @@ and build_runtime_error msg =
 
   (* find and call util function '_runtime_error' *)
   let func = find_function_in_module "_runtime_error" in
-  ignore(L.build_call func [| array_ptr; array_size |] "_runtime_error_call" builder)
+  ignore(L.build_call func [| array_ptr; array_size |] "" builder)
 
 (** [find_function_in_module name] returns the llvalue of function [name] *)
 and find_function_in_module name =
@@ -356,6 +400,38 @@ and find_function_in_module name =
   match L.lookup_function func_name the_module with
     | Some f -> f
     | None -> internal_error None "function %s not found in the_module" name
+
+(** [build_gc_malloc lltype name casted_res array_size_opt] build a call to GC_malloc of size of [lltype],
+    or of array_size -- if provided as option. If [casted_res] is true the returned i8* from function call
+    is casted to lltype* (same behaviour as L.build_malloc) before return, else i8* is returned *)
+and build_gc_malloc lltype name casted_res array_size_opt =
+  let llsize = match array_size_opt with
+    | Some size -> size
+    | None ->
+      let abi_size_of llty = LTG.DataLayout.abi_size llty ll_data_layout |> Int64.to_int in
+      lltype |> abi_size_of |> const_int
+  in
+  let func = find_function_in_module "GC_malloc" in
+  let malloc_ptr = L.build_call func [| llsize |] "GC_malloc_call" builder in
+  if casted_res
+  then
+    (* return an lltype_ptr, same as normal malloc. e.g. for lltype = i8* return i8** *)
+    let cast_type = L.pointer_type lltype in
+    L.build_bitcast malloc_ptr cast_type name builder
+  else
+    malloc_ptr
+
+(** [build_gc_register_finalizer gc_malloc_ptr] registers the function [_free_array_of_malloc] as finalizer at [gc_malloc_ptr].
+    The provided [gc_malloc_ptr] is only useful when the cast to {i8*, i64}* can be performed. The [_free_array_of_malloc]
+    function will cast the [gc_malloc_ptr] to {i8*, i64}* and take it's i8*. This pointer should point at non-garbage-collected
+    heap allocated with normal malloc *)
+and build_gc_register_finalizer gc_malloc_ptr =
+  let func = find_function_in_module "GC_register_finalizer" in
+  let free_func = find_function_in_module "_free_array_of_malloc" in
+  let null_ptr = generic_pointer_type |> L.const_null  in
+  let null_ptr_ptr = generic_pointer_type |> L.pointer_type  |> L.const_null in
+  let null_func_ptr_ptr = free_func |> L.type_of |> L.pointer_type |> L.const_null in
+  ignore(L.build_call func [| gc_malloc_ptr; free_func; null_ptr; null_func_ptr_ptr; null_ptr_ptr |] "" builder)
 
 (** [build_func_frame_vars name_sym func_ty info_tbl] declares the function if needed, builds it's basic blocks,
     builds it's function frame with escaping variables, allocates it's local variables in entry block *)
@@ -372,7 +448,7 @@ and build_func_frame_vars name_sym func_ty info_tbl =
   let build_frame_alloc esc_list =
     let prev_frame_ptr = load_from_display_array func_dec_depth in
     let esc_list_lltypes = List.map (fun (_, ty) -> lltype_of_ty ty) esc_list in
-    (* allocate new frame *)
+    (* allocate new frame in stack, because it won't outlive it's function *)
     let frame_type = struct_type (Array.of_list esc_list_lltypes) in
     let frame_ptr = L.build_alloca frame_type (S.name name_sym ^ ":frame_ptr") builder in
     (* store frame_ptr to display array *)
@@ -400,6 +476,11 @@ and build_func_frame_vars name_sym func_ty info_tbl =
   let entry_block = L.append_block ctx "entry" func in
   let body_block = L.append_block ctx "body" func in
   L.position_at_end entry_block builder;
+  (* in case of main function call GC_init *)
+  let _ = if (S.name name_sym) = "main" then
+    let func = find_function_in_module "GC_init" in
+    ignore(L.build_call func [| |] "" builder)
+  in
   let prev_frame_ptr = build_frame_alloc esc_list in
   alloc_locals local_list;
   ignore(L.build_br body_block builder);
@@ -442,28 +523,12 @@ and find_llvalue_ptr name_sym current_depth info_tbl on_call =
       | T.FUNC _ -> if on_call then L.build_load load_ptr "function_param_temp_load" builder else load_ptr
       | _ -> load_ptr
 
-(** [build_alloca_end_of_entry_block lltype name array_size_opt] allocates variable [name] of lltype [lltype]
-    at the end of current function's entry_block. In case of array allocation the option [array_size_opt] is 
-    provided *)
-and build_alloca_end_of_entry_block lltype name array_size_opt =
-  let instr_of_option = function
-    | None -> internal_error None "no instruction option specified in build_alloca_end_of_entry_block"
-    | Some i -> i
-  in
-  let entry_block_end_builder = builder |> L.insertion_block |> L.block_parent |> L.entry_block 
-    |> L.block_terminator |> instr_of_option |> L.builder_before ctx
-  in
-  match array_size_opt with
-  | None -> L.build_alloca lltype name entry_block_end_builder
-  | Some array_size -> L.build_array_alloca lltype array_size name entry_block_end_builder
-
 (** [build_func_return ret_llvalue] generates ir for the return expression of current function, returning value [ret_llvalue] 
     and pops it's function frame from [function_frames] *)
 and build_func_return (func_dec_depth, prev_frame_ptr) ret_llvalue =
   store_to_display_array func_dec_depth prev_frame_ptr;
   ignore(L.build_ret ret_llvalue builder)
   
-
 (** [build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct_ptr_opt array_ptr_opt dims_len_llvalues] 
     generates ir and builds the struct_ptr pointing to struct like {[array_ptr]; dim_llvalue1; dim_llvalue2; ...; dim_llvalueN}
     having name [struct_ptr_name]. Parameters are options, which if provided they are assembled together and not generated from scratch.
@@ -505,14 +570,21 @@ and build_array_struct struct_ptr_name struct_ptr_llty struct_ptr_ptr_opt struct
       (* calculate size as multiplication of dims *)
       let array_size = List.fold_left (fun acc d -> L.build_mul d acc "temp_array_size" builder) (const_int 1) dims_len_llvalues in
       let elem_type = struct_llty |> L.struct_element_types |> fun arr -> Array.get arr 0 |> L.element_type in
-      (* build alloca in current block instead of entry_block, because on runtime 
-          alloca instruction is before branch to dim_check blocks *)
-      L.build_array_alloca elem_type array_size "temp_array_alloca" builder
+      (*  allocate array in non-garbage-collected heap using normal malloc, because of misbehaviour on allocating it
+          on garbage-collected heap, thus this array will be deallocated upon garbage-collection of the whole struct
+          and after calling the registered finalizer function to free the heap allocated memory of malloc. *)
+      L.build_array_malloc elem_type array_size "array_ptr" builder
   in
   (* get or build struct *)
   let struct_ptr = match struct_ptr_opt with
     | Some ptr -> ptr
-    | None -> build_alloca_end_of_entry_block struct_llty struct_ptr_name None
+    | None -> 
+      let malloc_ptr = build_gc_malloc struct_llty struct_ptr_name false None in
+      (* register finalizer to act upon garbage collection *)
+      build_gc_register_finalizer malloc_ptr;
+      (* return casted pointer *)
+      let cast_type = L.pointer_type struct_llty in
+      L.build_bitcast malloc_ptr cast_type struct_ptr_name builder
   in
   (* store struct in possible provided struct_ptr_ptr *)
   let _ = match struct_ptr_ptr_opt with
@@ -691,7 +763,7 @@ and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }
   let constr_lltypes = List.map (fun (TA.Constr { ty }) -> lltype_of_ty ty |> L.element_type) constrs in
 
   let create_userdef_named_struct_type () =
-    let abi_size_of llty = LTG.DataLayout.abi_size llty ll_data_layout in
+    let abi_size_of llty = LTG.DataLayout.abi_size llty ll_data_layout |> Int64.to_int in
     let largest_lltype_of t1 t2 = if (abi_size_of t1) > (abi_size_of t2) then t1 else t2 in
     let largest_lltype = List.fold_left largest_lltype_of (List.hd constr_lltypes) constr_lltypes in
     (* opaque type *)
@@ -822,7 +894,8 @@ let rec generate_ir (opt: bool) (tast: TA.tast) (info_tbl: Esc.info_tbl_t): L.ll
   build_utility_funs ();
 
   let prev_frame_info = build_func_frame_vars ("main", 0) (T.FUNC ([], T.INT)) info_tbl in
-
+  
+  (* generate ir for the program -- body of main function *)
   let init_depth = 0 in
   List.iter (generate_ir_def (init_depth + 1) info_tbl) tast;
   
@@ -884,12 +957,13 @@ and generate_ir_dec depth info_tbl = function
     let lltype = lltype_of_ty ty |> L.element_type in
     let llvalue_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
     let llvalue_ptr_name = (S.name name_sym) ^ "_alloca_ptr" in
-    let llvalue_ptr = build_alloca_end_of_entry_block lltype llvalue_ptr_name None in
+    (* allocate value to garbage-collected-heap *)
+    let llvalue_ptr = build_gc_malloc lltype llvalue_ptr_name true None in
     ignore(L.build_store llvalue_ptr llvalue_ptr_ptr builder)
   | TA.ArrayDec { ty; name_sym; dims_len_exprs } ->
     let struct_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
     let struct_ptr_llty = (lltype_of_ty ty) in
-    let struct_ptr_name = (S.name name_sym) ^ "_alloca_ptr" in
+    let struct_ptr_name = (S.name name_sym) ^ "_struct_ptr" in
     let dims_len_llvalues = List.map (generate_ir_expr depth info_tbl) dims_len_exprs in
     ignore(build_array_struct struct_ptr_name struct_ptr_llty (Some struct_ptr_ptr) None None dims_len_llvalues)
 
@@ -924,7 +998,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
     let array_size = const_int str_size_with_zeros in
     (* create struct info *)
     let struct_ptr_llty = lltype_of_ty ty in
-    let struct_ptr_name =  "string_struct_alloca_ptr" in
+    let struct_ptr_name = "string_struct_ptr" in
     (* create and fill struct with array_ptr and size and return struct_ptr *)
     build_array_struct struct_ptr_name struct_ptr_llty None None (Some array_ptr) [array_size]
   | TA.E_BOOL { ty; value } -> 
@@ -939,7 +1013,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
 
     (* get array_struct_ptr and generate dim expressions *)
     let struct_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
-    let struct_ptr = L.build_load struct_ptr_ptr "array_struct_alloca_ptr_load" builder in
+    let struct_ptr = L.build_load struct_ptr_ptr "array_struct_ptr" builder in
     let exprs_ll = List.map generate_ir_expr_aux exprs in
     
     (* bound check *)
@@ -976,10 +1050,10 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
       let dim_offset = L.build_mul expr dim_size "temp_dim_offset_mul" builder in
       L.build_add prev_add dim_offset "temp_add_array_index" builder
     in
-    (* calculate array_index = last_expr_num + Σ(expr_num * dim_size) *)
+    (* calculate array_index = last_expr_num + Σ(expr_num * next_dim_size) *)
     let first_exprs_ll, last_expr_ll = split_last_elem [] exprs_ll in
-    let first_dim_sizes, _ = split_last_elem [] dim_sizes_ll in
-    let array_index = List.fold_left2 add_dim_offset last_expr_ll first_exprs_ll first_dim_sizes in
+    let next_dim_sizes = List.tl dim_sizes_ll in
+    let array_index = List.fold_left2 add_dim_offset last_expr_ll first_exprs_ll next_dim_sizes in
     
     (* return requested array element pointer -- done with gep *)
     let array_ptr = load_from_array_struct 0 in
@@ -987,7 +1061,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.E_ArrayDim { dim; name_sym } ->
     (* bound check if 1 <= dim <= dimNum *)
     let struct_ptr_ptr = find_llvalue_ptr name_sym depth info_tbl false in
-    let struct_ptr = L.build_load struct_ptr_ptr "array_struct_alloca_ptr_load" builder in
+    let struct_ptr = L.build_load struct_ptr_ptr "array_struct_ptr" builder in
 
     (* remove first element which is array pointer *)
     let dimNum = struct_ptr |> L.type_of |> L.element_type |> L.struct_element_types |> Array.length |> fun d -> d - 1 in
@@ -1003,13 +1077,15 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
         let dim_ptr = L.build_struct_gep struct_ptr dim "temp_struct_dim_ptr" builder in
         L.build_load dim_ptr "temp_struct_dim_load" builder
   | TA.E_New { ty } ->
-    (* allocate to heap a struct_ptr -- then this points to stack allocated structs *)
+    (* allocate to garbage-collected-heap a struct_ptr -- then this points to allocated structs in garbage-collected-heap *)
     let struct_ptr_lltype = lltype_of_ty ty |> L.element_type in
-    L.build_malloc struct_ptr_lltype "temp_malloc_for_new" builder
+    build_gc_malloc struct_ptr_lltype "temp_malloc_for_new" true None
   | TA.E_Delete { expr } ->
-    (* provide a pointer to heap allocated struct_ptr *)
+    (* provide a pointer to allocated struct_ptr in garbage-collected-heap *)
     let struct_ptr_ptr = generate_ir_expr_aux expr in
-    ignore(L.build_free struct_ptr_ptr builder);
+    (* store null to struct_ptr_ptr -- let garbage collection sweep the allocated struct *)
+    let null_struct_ptr = L.type_of struct_ptr_ptr |> L.element_type |> L.const_null in
+    ignore(L.build_store null_struct_ptr struct_ptr_ptr builder);
     unit_value
   | TA.E_FuncCall { ty; name_sym; param_exprs } ->
     if is_unary_operator (S.name name_sym) 
@@ -1029,8 +1105,8 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
       | None -> internal_error_of_msg_format (Some loc) "Some (tag, lltype)" "None" "constr_info_tbl" "pair"
     in
 
-    (* allocate userdef struct *)
-    let userdef_struct_ptr = build_alloca_end_of_entry_block userdef_struct_lltype ("userdef_struct_ptr:" ^ (S.name name_sym)) None in
+    (* allocate userdef struct in garbage-collected-heap *)
+    let userdef_struct_ptr = build_gc_malloc userdef_struct_lltype ("userdef_struct_ptr:" ^ (S.name name_sym)) true None in
     
     (* store tag *)
     let tag_ptr = L.build_struct_gep userdef_struct_ptr 0 "userdef_struct_tag_ptr" builder in
