@@ -85,14 +85,14 @@ let rec subst_lookup (st: subst_tbl) ty =
     | T.CHAR -> T.CHAR
     | T.BOOL -> T.BOOL
     | T.FLOAT -> T.FLOAT
-    | T.REF (ty, u) -> T.REF ((subst_lookup st ty), u)
-    | T.DYN_REF (ty, u) -> T.DYN_REF ((subst_lookup st ty), u)
+    | T.REF ty -> T.REF (subst_lookup st ty)
+    | T.DYN_REF ty -> T.DYN_REF (subst_lookup st ty)
     | T.ARRAY (0, _) as var_ty -> subst_lookup st var_ty
     | T.ARRAY (i, ty) -> T.ARRAY (i, subst_lookup st ty)
     | T.FUNC (param_tys, ret_ty) -> T.FUNC (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty)
     | T.USERDEF (("user defined", _), 0) as var_ty -> subst_lookup st var_ty
     | T.USERDEF (sym, n) -> T.USERDEF (sym, n)
-    | T.CONSTR (param_tys, ret_ty, u) -> T.CONSTR (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty, u)
+    | T.CONSTR (param_tys, ret_ty) -> T.CONSTR (List.map (subst_lookup st) param_tys, subst_lookup st ret_ty)
     | T.VAR _ as var_ty -> subst_lookup st var_ty
     | T.POLY _ as p -> internal_error "polymorphic %s found in substitution table" (T.ty_to_string p)
 
@@ -133,7 +133,7 @@ let rec occurs (var: T.ty) (ty: T.ty) = match var with
   | T.VAR var_sym ->
     begin match ty with
     | T.UNIT | T.INT | T.CHAR | T.BOOL | T.FLOAT -> false
-    | T.REF (t, _) | T.DYN_REF (t, _) -> occurs var t
+    | T.REF t | T.DYN_REF t -> occurs var t
     | T.ARRAY (_, t) -> occurs var t
     | T.FUNC (param_tys, ret_ty) -> List.exists (occurs var) (ret_ty :: param_tys)
     | T.USERDEF _ | T.CONSTR _ -> false
@@ -281,9 +281,9 @@ let unify_and_solve (contree: CT.contree): subst_tbl =
             else raise (UnifyError (loc, efs.occur_check, lt1, lt2))
           | _, T.VAR _ ->
             unify_con_aux (CT.Unify (lt2, lt1))
-          | T.REF (e1, _), T.REF (e2, _) | T.DYN_REF (e1, _), T.DYN_REF (e2, _) ->
+          | T.REF e1, T.REF e2 | T.DYN_REF e1, T.DYN_REF e2 ->
             unify_con_aux (CT.Unify (e1, e2))
-          | T.REF (e1, _), T.DYN_REF (e2, _) | T.DYN_REF (e1, _), T.REF (e2, _) ->
+          | T.REF e1, T.DYN_REF e2 | T.DYN_REF e1, T.REF e2 ->
             unify_con_aux (CT.Unify (e1, e2))
           | T.ARRAY (ds1, e1), T.ARRAY(ds2, e2) ->
             begin match ds1, ds2 with
@@ -302,7 +302,7 @@ let unify_and_solve (contree: CT.contree): subst_tbl =
               unify_con (CT.Unify (r1, r2)) loc [] (Some efs.func_return)
             end else
               raise (ParamNumError (loc, efs.func_param_num, expected_len, found_len))
-          | T.CONSTR (ps1, r1, _), T.CONSTR (ps2, r2, _) ->
+          | T.CONSTR (ps1, r1), T.CONSTR (ps2, r2) ->
             let found_len = List.length ps1 in
             let expected_len = List.length ps2 in
             if found_len = expected_len

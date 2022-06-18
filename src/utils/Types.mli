@@ -2,20 +2,18 @@ module S = Symbol
 
 type symbol = S.symbol
 
-type unique = unit ref
-
 type ty =
   | UNIT
   | INT
   | CHAR
   | BOOL
   | FLOAT
-  | REF of ty * unique              (* statically allocated ref *)
-  | DYN_REF of ty * unique          (* dynamically allocated ref *)
+  | REF of ty                       (* statically allocated ref *)
+  | DYN_REF of ty                   (* dynamically allocated ref *)
   | ARRAY of int * ty               (* dimensions, ty *)
   | FUNC of ty list * ty            (* param ty list, return type *)
   | USERDEF of symbol * int         (* user-defined type: symbol, currently active occurence number >= 1 *)
-  | CONSTR of ty list * ty * unique (* param ty list and user-defined type *)
+  | CONSTR of ty list * ty          (* param ty list and user-defined type *)
   | VAR of symbol                   (* meta-var used for annotation *)
   | POLY of int                     (* meta-var used for polymorphic built-in functions; multiple variables
                                       in the same function differ, if necessary, from integer *)

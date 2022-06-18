@@ -3,21 +3,18 @@ module S = Symbol
 type symbol = S.symbol
 [@@deriving show]
 
-type unique = unit ref
-[@@deriving show]
-
 type ty =
   | UNIT
   | INT
   | CHAR
   | BOOL
   | FLOAT
-  | REF of ty * unique
-  | DYN_REF of ty * unique
+  | REF of ty
+  | DYN_REF of ty
   | ARRAY of int * ty
   | FUNC of ty list * ty
   | USERDEF of symbol * int
-  | CONSTR of ty list * ty * unique
+  | CONSTR of ty list * ty
   | VAR of symbol
   | POLY of int
 
@@ -31,12 +28,12 @@ let rec ty_to_string = function
   | CHAR -> "char"
   | BOOL -> "bool"
   | FLOAT -> "float"
-  | REF (ty, _) -> paren ty ^ " ref"
-  | DYN_REF (ty, _) -> paren ty ^ " ref (dynamic)"
+  | REF ty -> paren ty ^ " ref"
+  | DYN_REF ty -> paren ty ^ " ref (dynamic)"
   | ARRAY (ds, ty) -> array_dims_to_string ds ^ " of " ^ paren ty
   | FUNC (tys, ret_ty) -> param_tys_to_string tys ^ " -> " ^ paren ret_ty
   | USERDEF (sym, i) -> if i <= 1 then S.name sym else S.name sym ^ " (def #" ^ string_of_int i ^ ")"
-  | CONSTR (_, user_ty, _) -> ty_to_string user_ty
+  | CONSTR (_, user_ty) -> ty_to_string user_ty
   | VAR sym -> S.name sym
   | POLY i -> "'p" ^ string_of_int i
 
@@ -59,14 +56,14 @@ and array_dims_to_string ds =
 and param_tys_to_string tys = String.concat " -> " (List.map paren tys)
 
 let rec is_valid_type = function
-  | REF (ARRAY _, _) | DYN_REF (ARRAY _, _) -> false
-  | REF (t, _) | DYN_REF (t, _) -> is_valid_type t
+  | REF (ARRAY _) | DYN_REF (ARRAY _) -> false
+  | REF t | DYN_REF t -> is_valid_type t
   | ARRAY (_, ARRAY _) -> false
   | ARRAY (d, t) -> d >= 0 && is_valid_type t (* d = 0 is the generic array type *)
   | FUNC (param_tys, FUNC _) -> false
   | FUNC (param_tys, ret_ty) -> List.for_all is_valid_type (ret_ty::param_tys)
-  | CONSTR (tys, USERDEF _, _) -> List.for_all is_valid_type tys
-  | CONSTR (_, _, _) -> false
+  | CONSTR (tys, USERDEF _) -> List.for_all is_valid_type tys
+  | CONSTR (_, _) -> false
   | _ -> true
 
 (** [currvarnum] is the current unused number of fresh variable *)
@@ -97,12 +94,12 @@ let rec instantiate_func_ty = function
         aux poly_fvs' (it :: acc) tys
 
     and instantiate_ty poly_fvs = function
-      | REF (ty, u) ->
+      | REF ty ->
         let poly_fvs', it = instantiate_ty poly_fvs ty in
-        poly_fvs', REF (it, u)
-      | DYN_REF (ty, u) ->
+        poly_fvs', REF it
+      | DYN_REF ty ->
         let poly_fvs', it = instantiate_ty poly_fvs ty in
-        poly_fvs', DYN_REF (it, u)
+        poly_fvs', DYN_REF it
       | ARRAY (i, ty) ->
         let poly_fvs', it = instantiate_ty poly_fvs ty in
         poly_fvs', ARRAY (i, it)

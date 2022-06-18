@@ -201,7 +201,7 @@ and llname_equality_fun_of_userdef_ty = function
 
 (** [userdef_ty_of_constr_ty ty] returns the userdef ty of given constr ty [ty] *)
 and userdef_ty_of_constr_ty = function
-  | T.CONSTR (_, ty, _) -> ty
+  | T.CONSTR (_, ty) -> ty
   | _ -> internal_error_of_msg_format None "CONSTR" "other type" "userdef_ty_of_constr_ty" "type"
 
 (** [userdef_ty_of_constr c] returns the userdef ty of given TA.constr [c] *)
@@ -215,7 +215,7 @@ let rec lltype_of_ty: T.ty -> L.lltype = function
   | T.CHAR -> char_type
   | T.BOOL -> bool_type
   | T.FLOAT -> float_type
-  | T.REF (ty, _) | T.DYN_REF (ty, _) -> L.pointer_type (lltype_of_ty ty)
+  | T.REF ty| T.DYN_REF ty -> L.pointer_type (lltype_of_ty ty)
   | T.ARRAY (dims, ty) ->
     (* array type is a pointer to a struct { pointer to array, dim1 size, ..., dimN size } *)
     let rec gen_int_type_list curr_dim curr_tys = 
@@ -237,7 +237,7 @@ let rec lltype_of_ty: T.ty -> L.lltype = function
       | Some lltype -> L.pointer_type lltype
       | None -> L.pointer_type (L.named_struct_type ctx userdef_type_name) (* just declare the opaque type *)
     end
-  | T.CONSTR (param_tys, userdef_ty, _) ->
+  | T.CONSTR (param_tys, userdef_ty) ->
     (* type constructor is pointer to a struct { int_tag; param_ty1; ...,  param_tyN} 
        following on the implementation of tagged union *)
     let param_lltypes = List.map lltype_of_ty param_tys in
@@ -841,7 +841,7 @@ and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }
       
       (* take list of constr_param Types.tys *)
       let constr_param_tys = match ty with
-        | T.CONSTR (param_tys, _, _) -> param_tys
+        | T.CONSTR (param_tys, _) -> param_tys
         | _ as other_ty -> internal_error None "Constructor %s with invalid type: %s" constr_name (T.ty_to_string other_ty)
       in
       (* create list_pairs with constr_params_llvalues *)

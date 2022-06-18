@@ -77,12 +77,12 @@ let lookup (st: U.subst_tbl) (ty: T.ty) loc =
     | T.CHAR -> T.CHAR
     | T.BOOL -> T.BOOL
     | T.FLOAT -> T.FLOAT
-    | T.REF (t, u) -> T.REF ((lookup_aux t), u)
-    | T.DYN_REF (t, u) -> T.DYN_REF ((lookup_aux t), u)
+    | T.REF t -> T.REF (lookup_aux t)
+    | T.DYN_REF t -> T.DYN_REF (lookup_aux t)
     | T.ARRAY (i, t) -> T.ARRAY (i, lookup_aux t)
     | T.FUNC (param_tys, ret_ty) -> T.FUNC (List.map lookup_aux param_tys, lookup_aux ret_ty)
     | T.USERDEF (sym, n) -> T.USERDEF (sym, n)
-    | T.CONSTR (param_tys, ret_ty, u) -> T.CONSTR (List.map lookup_aux param_tys, lookup_aux ret_ty, u)
+    | T.CONSTR (param_tys, ret_ty) -> T.CONSTR (List.map lookup_aux param_tys, lookup_aux ret_ty)
     | T.VAR _ as var_ty ->
       begin match H.find_opt st var_ty with
       | None ->

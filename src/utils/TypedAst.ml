@@ -94,7 +94,7 @@ let rec from_ast_type (t: Ast._type) = match t with
   | Ast.TY_BOOL   -> T.BOOL
   | Ast.TY_FLOAT  -> T.FLOAT
   | Ast.TY_FUNC _ -> from_func_type t
-  | Ast.TY_REF ty -> T.REF (from_ast_type ty, ref ())
+  | Ast.TY_REF ty -> T.REF (from_ast_type ty)
   | Ast.TY_ARRAY { dims_num_opt; ty } -> T.ARRAY (dopt_to_num dims_num_opt, (from_ast_type ty))
   | Ast.TY_ID ty_sym -> T.USERDEF (ty_sym, 0)
 

@@ -140,7 +140,7 @@ and collect_expr venv tenv e =
       let dim = List.length exprs in
       let array_ty = sym_to_ty loc venv name_sym in
       let elem_ty = T.freshVar () in
-      let array_cons = List.map make_con [(ty, T.REF (elem_ty, ref ())); (T.ARRAY (dim, elem_ty), array_ty)] in
+      let array_cons = List.map make_con [(ty, T.REF elem_ty); (T.ARRAY (dim, elem_ty), array_ty)] in
       let expr_cons = List.map (fun ty -> make_con (ty, T.INT)) expr_tys in
       CT.E_ArrayRef { array_cons = array_cons; expr_cons = expr_cons; name_sym; exprs = conexprs; loc }
     | TA.E_ArrayDim { ty; dim; name_sym; loc } ->
@@ -164,7 +164,7 @@ and collect_expr venv tenv e =
       let conexprs = List.map collect_expr_aux param_exprs in
       let param_tys = List.map TA.expr_ty param_exprs in
       let constr_ty = sym_to_ty loc tenv name_sym in
-      let con = make_con (T.CONSTR (param_tys, ty, ref ()), constr_ty) in
+      let con = make_con (T.CONSTR (param_tys, ty), constr_ty) in
       CT.E_ConstrCall { con = con; param_exprs = conexprs; loc }
     | TA.E_LetIn { ty; letdef; in_expr; loc } ->
       let local_venv, conletdef = collect_let_def_local_venv venv tenv letdef in
@@ -235,7 +235,7 @@ and collect_expr venv tenv e =
     let conbps = List.map collect_base_pattern base_patterns in
     let bp_tys = List.map TA.base_pattern_ty base_patterns in
     let constr_ty = sym_to_ty loc tenv constr_sym in
-    let con = make_con (T.CONSTR(bp_tys, ty, ref ()), constr_ty) in
+    let con = make_con (T.CONSTR (bp_tys, ty), constr_ty) in
     local_venv, CT.CP_BASIC { con = con; constr_sym; base_patterns = conbps; loc }
 
   (** [make_match_cons loc ty match_ty clause_tys] returns the constraints generated from whole

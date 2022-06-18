@@ -204,12 +204,12 @@ and annotate_tdec_funs =
 
   and annotate_constr userdef_ty tenv = function
     | A.Constr { name_sym; tys_opt = None; index; loc } ->
-      let ty = T.CONSTR ([], userdef_ty, ref ()) in
+      let ty = T.CONSTR ([], userdef_ty) in
       let tenv' = S.enter tenv name_sym ty in
       tenv', TA.Constr { ty = ty; name_sym; index; loc }
     | A.Constr { name_sym; tys_opt = Some t_list; index; loc } ->
       let tys = List.map (from_ast_type loc tenv) t_list in
-      let ty = T.CONSTR (tys, userdef_ty, ref ()) in
+      let ty = T.CONSTR (tys, userdef_ty) in
       let tenv' = S.enter tenv name_sym ty in
       tenv', TA.Constr { ty = ty; name_sym; index; loc }
   
@@ -234,7 +234,7 @@ and annotate_non_rec_dec_funs =
       let abody = annotate_expr local_venv tenv body in
       TA.FunctionDec { ty = fun_ty; name_sym; params = aparams; body = abody; loc }
     | A.MutVarDec { name_sym; ty_opt; loc } ->
-      let ty = T.REF (ty_opt_to_ty loc tenv ty_opt, ref ()) in
+      let ty = T.REF (ty_opt_to_ty loc tenv ty_opt) in
       TA.MutVarDec { ty = ty; name_sym; loc }
     | A.ArrayDec { name_sym; dims_len_exprs; ty_opt; loc } ->
       let value_ty = ty_opt_to_ty loc tenv ty_opt in
@@ -272,7 +272,7 @@ and annotate_rec_dec_funs =
       let fun_ty = make_fun_ty aparams ret_ty in
       S.enter venv name_sym fun_ty
     | A.MutVarDec { name_sym; ty_opt; loc } ->
-      let ty = T.REF (ty_opt_to_ty loc tenv ty_opt, ref ()) in
+      let ty = T.REF (ty_opt_to_ty loc tenv ty_opt) in
       S.enter venv name_sym ty
     | A.ArrayDec { name_sym; dims_len_exprs; ty_opt; loc } ->
       let value_ty = ty_opt_to_ty loc tenv ty_opt in
@@ -338,7 +338,7 @@ and annotate_expr venv tenv expr =
       let dim = dim_opt_to_num loc venv name_sym dim_opt in
       TA.E_ArrayDim {ty = T.INT; dim = dim; name_sym; loc }
     | A.E_New { ty; loc } ->
-      TA.E_New { ty = T.DYN_REF (from_ast_type loc tenv ty, ref ()); loc }
+      TA.E_New { ty = T.DYN_REF (from_ast_type loc tenv ty); loc }
     | A.E_Delete { expr; loc } ->
       let aexpr = annotate_expr_aux expr in
       TA.E_Delete { ty = T.UNIT; expr = aexpr; loc }
