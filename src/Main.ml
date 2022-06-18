@@ -1,5 +1,5 @@
 (** Usage message of llamac *)
-let usage_msg = String.concat " " ["Usage:"; Sys.argv.(0); "[-flag] [--option] filename"]
+let usage_msg = Printf.sprintf "Usage: %s [-flag] [--option] filename" Sys.argv.(0)
 
 (** llc exetutable *)
 let llc_exe = "llc"
@@ -7,9 +7,12 @@ let llc_exe = "llc"
 (** clang exetutable *)
 and clang_exe = "clang"
 
-(** runtime library files *)
-and liblla_file = "src/runtime/liblla.a"
-and libgc_file = "src/runtime/libgc.a"
+(** runtime library files with absolute path *)
+and liblla_file, libgc_file = 
+  let pwd = Unix.open_process_in "pwd" |> input_line in
+  let infix = String.concat Filename.dir_sep [""; "src"; "runtime"; ""] in
+  let lib_of name = pwd ^ infix ^ name in
+  lib_of "liblla.a", lib_of "libgc.a"
 
 (** Variable for input file *)
 let filename = ref ""
