@@ -23,7 +23,7 @@
 --------
 
 ## Contributors
-* [actyp](https:://github.com/actyp)
+* [actyp](https://github.com/actyp)
 * [m0x41n](https://github.com/m0x41n)
 
 ## Llama Language
