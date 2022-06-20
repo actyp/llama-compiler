@@ -179,6 +179,8 @@ The assembling phase reads Llvm IR code from `filename.imm` and compiles it into
 ---
 Final stage is to link the `filename.asm` file with the static runtime libraries using `clang`, in order to produce the final binary file `filename.out`. The first library is `libgc.a`, which contains the functions used for garbage collection. The second library is `liblla.a`, which contains the library functions tha llama provides. Specifically these are implemented in C and compiled into the static library `liblla.a`. Note that in linking phase `liblla.a` library needs also `libm` (math library), because `math.h` is used in `external_functions.c`. Libraries can be found at [**`src/runtime`**](./src/runtime) directory. The command call can be found at [**`src/Main.ml`**](./src/Main.ml)
 
+> The garbage collection static library `libgc.a` is taken after locally compiling [gc-8.0.6 garbage collector](https://www.hboehm.info/gc/) 
+
 > The process to create the `liblla.a` static library follows
 ```bash
 # cd into runtime dir
