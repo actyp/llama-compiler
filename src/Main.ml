@@ -1,15 +1,24 @@
+(** Description of llamac *)
+let desc_msg = "Default behaviour is to produce three files:\n  \
+                  - filename.imm     the generated Llvm IR\n  \
+                  - filename.asm     the generated assembly\n  \
+                  - filename.out     the generated binary\n  \
+                  > '.ext' should not be one of those above"
+
 (** Usage message of llamac *)
-let usage_msg = Printf.sprintf "Usage: %s [-flag] [--option] filename" Sys.argv.(0)
+let usage_msg = Printf.sprintf "Usage: %s [-flag] [--option] filename[.ext]\n\n%s" Sys.argv.(0) desc_msg
+
+let line_output_of_sys_cmd cmd = Unix.open_process_in cmd |> input_line
 
 (** llc exetutable *)
-let llc_exe = "llc"
+let llc_exe = line_output_of_sys_cmd "which llc"
 
 (** clang exetutable *)
-and clang_exe = "clang"
+and clang_exe = line_output_of_sys_cmd "which clang"
 
 (** runtime library files with absolute path *)
 and liblla_file, libgc_file = 
-  let pwd = Unix.open_process_in "pwd" |> input_line in
+  let pwd = line_output_of_sys_cmd "pwd" in
   let infix = String.concat Filename.dir_sep [""; "src"; "runtime"; ""] in
   let lib_of name = pwd ^ infix ^ name in
   lib_of "liblla.a", lib_of "libgc.a"
@@ -23,21 +32,49 @@ type output_option = Lex | Parse | Infer | IR | Asm | ToFiles
 (** Variable for option selection *)
 let output_opt: output_option ref = ref ToFiles
 
-(** [select_opt outp _] changes the value of [output_opt] to [outp] *)
-let select_opt outp _ = output_opt := outp
-
+(** Variable for enabling Llvm IR optimization *)
 let optmz_flag = ref false
+
+(** [select_opt outp _] changes the value of [output_opt] to [outp] *)
+let select_opt outp _ =
+  match !output_opt with
+  | ToFiles ->
+    output_opt := outp
+  | _ ->
+    let mut_exc_args_str = String.concat ", " ["-i"; "-f"; "--lex"; "--parse"; "--infer"] in
+    let msg = "These are mutually exclusive (only one is allowed): " ^ mut_exc_args_str in
+    Printf.eprintf "%s: %s\n" Sys.argv.(0) msg;
+    exit(1)
 
 (** command line options *)
 let speclist = Arg.align [
   ("\nFlags & Options:", Arg.Unit ignore, " ");
   ("-O", Arg.Set optmz_flag, " Llvm IR Optimization flag");
-  ("-i", Arg.Unit (select_opt IR), " Output of LLVM IR to std_out");
+  ("-i", Arg.Unit (select_opt IR), " Output of Llvm IR to std_out");
   ("-f", Arg.Unit (select_opt Asm), " Output of assembly to std_out");
   ("--lex", Arg.Unit (select_opt Lex) , " Lexical analysis only");
   ("--parse", Arg.Unit (select_opt Parse), " Parsing and printing AST only");
   ("--infer", Arg.Unit (select_opt Infer), " Printing type-inferred AST only");
 ]
+
+(** [parse_cmd_line ()] parses command line arguments and returns the in_channel
+    after opening [filename], while handling any error occured *)
+let parse_cmd_line () =
+  let ext_check fname =
+    let error_exts = [".imm"; ".asm"; ".out"] in
+    let msg = "File extension should not be one of: " ^ String.concat ", " error_exts in
+    let ext = Filename.extension fname in
+    if List.mem ext error_exts then raise (Sys_error (msg))
+  in
+  try
+    Arg.parse speclist (fun f -> filename := f) usage_msg;
+    if !filename <> ""
+    then (ext_check !filename; open_in !filename)
+    else raise (Sys_error ("filename is empty"))
+  with
+    Sys_error msg ->
+      Printf.eprintf "%s: %s\n" Sys.argv.(0) msg;
+      exit(1)
 
 (** [close_exit in_ch cd] closes abruptly channel [in_ch] and exits with code [cd] *)
 let close_exit in_ch cd =
@@ -131,6 +168,7 @@ let gen_asm in_ch optmz to_stdout_only =
   IRCodegen.pprint_to_file ir_filename ir_module;
   
   let asm_filename = filename_without_extension ^ ".asm" in
+  (* produce position-independent code -- pic *)
   let to_asm_cmd = Printf.sprintf "%s --relocation-model=pic -o %s %s" llc_exe asm_filename ir_filename in
   exec_and_check_cmd to_asm_cmd;
 
@@ -146,20 +184,6 @@ let gen_asm in_ch optmz to_stdout_only =
     let to_exe_cmd = Printf.sprintf "%s -o %s %s %s %s -lm" clang_exe exe_filename asm_filename libgc_file liblla_file in
     exec_and_check_cmd to_exe_cmd
   end
-
-(** [parse_cmd_line ()] parses command line arguments and returns the in_channel
-    after opening [filename], while handling any error occured *)
-let parse_cmd_line () =
-  try
-    Arg.parse speclist (fun f -> filename := f) usage_msg;
-    if !filename <> ""
-    then open_in !filename
-    else raise (Sys_error ("filename is empty"))
-  with
-    Sys_error msg ->
-      Printf.eprintf "%s: %s.\n" Sys.argv.(0) msg;
-      Arg.usage speclist usage_msg;
-      exit(1)
 
 (** [main] parses command line arguments and behaves accordingly *)
 let main =
