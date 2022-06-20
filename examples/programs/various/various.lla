@@ -1,0 +1,374 @@
+(* letdefnonrec *)
+let a_unit = ()
+and a_int = 1
+and a_char = 'a' 
+and a_bool = true 
+and a_float = 3.14
+let a_string = "abc"
+let b_string = "abc"
+and c_string = "abcd"
+and mutable a_ref 
+and mutable a_array [5,3,2]
+
+let a_other_int = a_int
+let a = dim 3 a_array
+
+let nl (u: unit) = print_string "\n"
+
+let assert_print =
+  print_string "a_int = "; print_int a_int; nl ();
+  print_string "a_char = "; print_char a_char; nl ();
+  print_string "a_bool = "; print_bool a_bool; nl ();
+  print_string "a_float = "; print_float a_float;  nl ();
+  print_string "a_string = "; print_string a_string; nl ();
+  print_string "b_string = "; print_string b_string; nl ();
+  print_string "c_string = "; print_string c_string; nl ();
+  a_ref := 0; print_string "0 = !a_ref = "; print_int !a_ref; nl ();
+  incr a_ref; print_string "(incr a_ref) 1 = "; print_int !a_ref; nl ();
+  decr a_ref; print_string "(decr a_ref) 0 = "; print_int !a_ref; nl ();
+  a_array[4,2,1] := 421; print_string "421 = !a_array[4,2,1] = "; print_int !a_array[4,2,1]; nl ()
+
+
+(* letdefrec *)
+let rec f1_1 x = let g y = x in g (f2_1 1) and f2_1 x = f1_1 x
+let const1 = let rec f1 x = if x = 0 then a_unit else f1 (x-1) in f1 3
+let rec f2 x = if x = 0 then 1 else f3 (x-1)
+and f3 x = if x = 0 then 2 else f2 (x-1)
+
+let rec f4 x = f4 (f5 x) and f5 x = h and h = 2
+
+let rec t1 = 1 and tf1 x = x + t1
+let rec mutable tm1 and tf2 x = tm1 := x
+let rec mutable ta1 [1] and tf3 x = ta1[0] := x
+
+let rec loop x = if x = 0 then () else (print_char '.'; loop (x - 1))
+  
+let assert_print =
+  print_string "2 = tf1 1 = "; print_int (tf1 1); nl ();
+  print_string "1 = ta1[0] = "; print_int ((tf3 1); !ta1[0]); nl ();
+  print_string ".... = "; loop 4; nl ()
+
+(* type annotation *)
+let f6 (x: int ref): int = !x
+and f7 (x: array [*,*,*] of int) = !x[0,0,0]
+and f8 (f: char->bool->float) = f a_char a_bool
+
+let assert_print =
+  let f8_f c b = 
+    print_string "[inside f8_f: ";
+    print_string "c = "; print_char c;
+    print_string ", b = "; print_bool b;
+    print_string "] ";
+    1.0
+  in
+  (a_ref := 42); print_string "42 = !a_ref = "; print_int (f6 a_ref); nl ();
+  (a_array[0,0,0] := 42); print_string "42 = !a_array[0,0,0] = "; print_int (f7 a_array); nl ();
+  print_string "1.0 = f8 f8_f = "; print_float (f8 f8_f); nl ()
+
+
+(* typedef *)
+type color = Red | Green | Blue
+and number = Integer of int | Real of float | Complex of float float
+and list = Nil | Cons of int list
+
+type tree = Leaf | Node of int forest
+and forest = Empty | NonEmpty of tree forest
+
+type a = A of b and b = B of c and c = C of a
+type opt = A of int | B of float
+
+let rec a_nil = Nil and a_list = Cons 1 (Cons 2 Nil)
+let rec a_leaf = Leaf and a_empty = Empty
+let a_tree = Node 1 a_empty
+let a_forest = NonEmpty a_tree (NonEmpty a_leaf Empty)
+
+(* pattern matching *)
+let p_color c = match c with 
+    Red -> print_string "Red"
+  | Green -> print_string "Green"
+  | Blue -> print_string "Blue"
+end
+
+let p_opt o = match o with 
+    A i -> print_string "A "; print_int i
+  | B f-> print_string "B "; print_float f
+end
+
+let pmtype x = match x with
+    Integer i      -> print_string "Integer "; print_int i
+  | Real f         -> print_string "Real "; print_float f
+  | Complex re 0.0 -> print_string "Complex "; print_float re
+  | Complex 0.0 im -> print_string "Complex j"; print_float im
+  | Complex re im  -> print_string "Complex ";
+                      print_float re;
+                      print_string (if im > 0.0 then "+j" else "-j");
+                      print_float (fabs im)
+end
+
+(* new, delete, let in, begin end *)
+let pc_new (u: unit) =
+  let c = new color in
+  begin 
+    c := Red; print_string "Red = "; p_color !c;  nl (); delete c;
+    c := Blue; print_string "Blue = "; p_color !c; nl (); delete c
+  end
+
+let assert_print = 
+  print_string "Red = "; p_color Red; nl ();
+  print_string "Blue = "; p_color Blue; nl ();
+  pc_new ();
+  print_string "A 1 = "; p_opt (A 1); nl ();
+  print_string "B 2.1 = "; p_opt (B 2.1); nl ();
+  print_string "pmtype test:\n";
+  print_string "Integer 2 = "; pmtype (Integer 2); nl ();
+  print_string "Real 1.2345 = "; pmtype (Real 1.2345); nl ();
+  print_string "Complex 1.11 = "; pmtype (Complex 1.11 0.0); nl ();
+  print_string "Complex j2.22 = "; pmtype (Complex 0.0 2.22); nl ();
+  print_string "Complex 3.33-j4.44 = "; pmtype (Complex 3.33 (-.4.44)); nl ();
+  let n1 = Integer 1 and n2 = Real 1.1
+  and n3 = Integer 1 and n4 = Complex 1.1 1.1 
+  and n5 = Complex 1.1 1.2 and n6 = Complex 1.1 1.1 in
+  print_string "nat equality:\n";
+  print_string "true = "; print_bool (n1 == n1); nl ();
+  print_string "false = "; print_bool (n1 == n2); nl ();
+  print_string "false = "; print_bool (n1 == n3); nl ();
+  print_string "false = "; print_bool (n1 == n4); nl ();
+  print_string "false = "; print_bool (n1 == n5); nl ();
+  print_string "nat inequality:\n";
+  print_string "false = "; print_bool (n1 != n1); nl ();
+  print_string "true = "; print_bool (n1 != n2); nl ();
+  print_string "true = "; print_bool (n1 != n3); nl ();
+  print_string "true = "; print_bool (n1 != n4); nl ();
+  print_string "true = "; print_bool (n1 != n5); nl ();
+  print_string "struct equality:\n";
+  print_string "true = "; print_bool (n1 = n1); nl ();
+  print_string "false = "; print_bool (n1 = n2); nl ();
+  print_string "true = "; print_bool (n1 = n3); nl ();
+  print_string "false = "; print_bool (n1 = n4); nl ();
+  print_string "false = "; print_bool (n4 = n5); nl ();
+  print_string "true = "; print_bool (n4 = n6); nl ();
+  print_string "struct inequality:\n";
+  print_string "false = "; print_bool (n1 <> n1); nl ();
+  print_string "true = "; print_bool (n1 <> n2); nl ();
+  print_string "false = "; print_bool (n1 <> n3); nl ();
+  print_string "true = "; print_bool (n1 <> n4); nl ();
+  print_string "true = "; print_bool (n4 <> n5); nl ();
+  print_string "false = "; print_bool (n4 <> n6); nl ()
+
+
+(* array dim and array ref *)
+let f9 x: array [*,*] of int =
+  let mutable a [1,1]: int in
+  dim a;
+  a[0,0] := x;
+  a
+
+let const2 = let f x = dim 2 x and mutable a [1,1,1] in f a
+let const3 = let rec mutable a [1,1] and f x = 1 in a[0,0] := f
+
+let f10 ar = let d = dim 3 ar in print_string "1 = dim 3 ar = "; print_int d; print_string "\n"
+
+let assert_print =
+  print_string "1 = !(f9 1) = "; let a = f9 1 in print_int !a[0,0]; nl ();
+  print_string "1 = const2 = "; print_int const2; nl ();
+  let mutable arr [1, 1, 1] in f10 arr
+
+
+(* unmatched if *)
+let uif x = if x = 0 then (print_int x; nl ())
+
+(* while do done *)
+let while_test x =
+  let mutable i in
+  i := 0;
+  print_string "while loop: (0 -> 10)\n";
+  while !i < (x + 1) do 
+    print_int !i;
+    print_string "\n";
+    incr i
+  done
+
+(* for do done *)
+let for_test x =
+  print_string "for loop: (0 -> 5 -> 0)\n";
+  for i = 0 to x do
+    print_int i;
+    print_string "\n"
+  done;
+  for i = (x-1) downto 0 do
+    print_int i;
+    print_string "\n"
+  done
+
+(* if -- while -- for together *)
+let if_while_for b = 
+  if b 
+  then for j = 1 to 3 do print_char '.' done
+  else while true do () done
+
+let assert_print = 
+  while_test 10; 
+  for_test 5;
+  print_string "... = "; if_while_for true; nl ()
+
+
+(* operators *)
+let u1 = +1
+let u2 = -1
+let u3 = +.1.0
+let u4 = -.1.0
+let mutable u5_m
+let u5 = u5_m := true; !u5_m
+let u6 = not true
+
+let b1 = 1 + 2
+let b2 = 1 - 2
+let b3 = 1 * 2
+let b4 = 5 / 2
+let b5 = 1.0 +. 2.0
+let b6 = 1.0 -. 2.0
+let b7 = 1.0 *. 2.0
+let b8 = 5.0 /. 2.0
+let b9 = 5 mod 2
+let b10 = 5.0 ** 2.0
+let b11 = (5 = 2)
+let b12 = (5 <> 2)
+let b13 = 5 < 2
+let b14 = 5 > 2
+let b15 = 5 <= 2
+let b16 = 5 >= 2
+let b17 = (5 == 2)
+let b18 = (5 != 2)
+let b19 = true && false
+let b20 = false || true
+let b21 = ();()
+let mutable b22_m 
+let b22 = b22_m := 1; !b22_m
+
+let assert_print =
+  print_string "unary operators:\n";
+  print_string "1 = "; print_int u1; nl ();
+  print_string "-1 = "; print_int u2; nl ();
+  print_string "1.0 = "; print_float u3; nl ();
+  print_string "-1.0 = "; print_float u4; nl ();
+  print_string "true = "; print_bool u5; nl ();
+  print_string "false = "; print_bool u6; nl ();
+  print_string "binary operators:\n";
+  print_string "3 = "; print_int b1; nl ();
+  print_string "-1 = "; print_int b2; nl ();
+  print_string "2 = "; print_int b3; nl ();
+  print_string "2 = "; print_int b4; nl ();
+  print_string "3.0 = "; print_float b5; nl ();
+  print_string "-1.0 = "; print_float b6; nl ();
+  print_string "2.0 = "; print_float b7; nl ();
+  print_string "2.5 = "; print_float b8; nl ();
+  print_string "1 = "; print_int b9; nl ();
+  print_string "25.0 = "; print_float b10; nl ();
+  print_string "false = "; print_bool b11; nl ();
+  print_string "true = "; print_bool b12; nl ();
+  print_string "false = "; print_bool b13; nl ();
+  print_string "true = "; print_bool b14; nl ();
+  print_string "false = "; print_bool b15; nl ();
+  print_string "true = "; print_bool b16; nl ();
+  print_string "false = "; print_bool b17; nl ();
+  print_string "true = "; print_bool b18; nl ();
+  print_string "false = "; print_bool b19; nl ();
+  print_string "true = "; print_bool b20; nl ();
+  print_string "1 = "; print_int b22; nl ()
+
+
+(* escaping variables *)
+(* escaping variables in nested functions *)
+let ex1 = 
+  print_string "escaping in nested function example:\n";
+  let rec f_nest0 x1 =
+    let x2 = 1 in
+    let f_nest1 x3 = x3 + 1 in
+    let f_nest2 x4 x5 =
+      let x6 = x2 + x4 + x5 in
+      let f_nest3 x7 = x4 + x6 + f_nest1 x7 in
+      f_nest3 x2
+    in
+    f_nest2 x1 1
+  in
+  print_string "6 = "; print_int (f_nest0 1); nl ()
+
+(* escaping for loop *)
+let a = 2 and x = 3
+let ex2 =
+  print_string "escaping for loop example:\n";
+  let print_int name value = 
+    print_string name; print_string ": ";
+    print_int value; print_string "\n"
+  in
+  let f x =
+    for i = 1 to 3 do
+      for j = 1 to 3 do
+        let g (u:unit) =
+          print_int "i" i; 
+          print_int "j" j;
+          print_int "x" x; 
+          print_int "a" a;
+          print_int "i + j + x + a" (i + j + x + a);
+          print_string "\n"
+        in
+        g ()
+      done
+    done
+  in
+  f 1
+
+(* escaping pattern match variable *)
+type nstd = T1 of int | T2
+let ex3 =
+  print_string "escaping pattern match variable:\n";
+  let f x = match x with
+    T1 i -> let g (u:unit) = print_int i; nl () in g ()
+  | T2 -> ()
+  end
+  in
+  print_string "T1 3 = "; f (T1 3);
+  print_string "T2 = "; f T2
+
+
+(* function as parameter *)
+let g f = print_int (f 1); print_string "\n"
+
+let assert_print =
+  let f1 x = x + 1 in 
+  print_string "2 = "; g f1;
+  let f2 x = x - 1 in 
+  print_string "0 = "; g f2
+
+
+(* recursive type and function returning either type or reference variable *)
+type t = T1 | T2 of t
+
+let rec pt t = match t with 
+    T1 -> print_string "T1\n"
+  | T2 t1 -> print_string "T2 "; pt t1
+end
+
+let assert_print =
+  print_string "T1 = "; pt T1; 
+  print_string "T2 T1 = "; pt (T2 T1);
+  print_string "T2 T2 T1 = "; pt(T2 (T2 T1));
+
+  (* return type *)
+  let gen (u: unit) = T1 in 
+  print_string "T2 T2 T1 = "; pt (T2 (T2 (gen ())));
+
+  (* return mutable var *)
+  let gen (u:unit) = let mutable m in m in 
+  let pp m = m := T2 (T2 T1); pt !m in
+  print_string "T2 T2 T1 = "; pp (gen ());
+
+  (* return dyn_ref *)
+  let gen (u:unit) = let m = new t in m in 
+  let pp m = m := T2 (T2 T1); pt !m in
+  print_string "T2 T2 T1 = "; pp (gen ());
+
+  (* return array ref *)
+  let gen (u:unit) = let mutable m [1,2,3] in m in 
+  let pp m = m[0,0,0] := T2 (T2 T1); pt !m[0,0,0] in 
+  print_string "T2 T2 T1 = "; pp (gen ())

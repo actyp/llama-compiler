@@ -1,0 +1,1108 @@
+; ModuleID = 'llama'
+source_filename = "llama"
+
+%0 = type { i64, i64, %0*, %0* }
+
+@display_array = local_unnamed_addr global [2 x i8*] zeroinitializer
+@0 = private unnamed_addr constant [33 x i8] c"Runtime Error: Division by zero\0A\00", align 1
+@1 = private unnamed_addr constant [85 x i8] c"Runtime Error: Invalid constructor of type tree encountered in comparison operation\0A\00", align 1
+@2 = private unnamed_addr constant [71 x i8] c"Runtime Error: Given expression could not be matched with some clause\0A\00", align 1
+@3 = private unnamed_addr constant [2 x i8] c"(\00", align 1
+@4 = private unnamed_addr constant [2 x i8] c"|\00", align 1
+@5 = private unnamed_addr constant [2 x i8] c")\00", align 1
+@6 = private unnamed_addr constant [15 x i8] c"Initial tree: \00", align 1
+@7 = private unnamed_addr constant [2 x i8] c"\0A\00", align 1
+@8 = private unnamed_addr constant [10 x i8] c"Deleting \00", align 1
+@9 = private unnamed_addr constant [3 x i8] c": \00", align 1
+
+declare i1 @lla_print_int(i64) local_unnamed_addr
+
+declare i1 @lla_print_string({ i8*, i64 }*) local_unnamed_addr
+
+declare i1 @lla_exit_with_error({ i8*, i64 }*, i64) local_unnamed_addr
+
+declare i8* @GC_init() local_unnamed_addr
+
+declare i8* @GC_malloc(i64) local_unnamed_addr
+
+declare void @GC_register_finalizer(i8*, void (i8*, i8*)*, i8*, void (i8*, i8*)**, i8**) local_unnamed_addr
+
+define void @_free_array_of_malloc(i8* nocapture readonly %0, i8* nocapture readnone %1) {
+  %3 = bitcast i8* %0 to i8**
+  %4 = load i8*, i8** %3, align 8
+  tail call void @free(i8* %4)
+  ret void
+}
+
+declare void @free(i8*) local_unnamed_addr
+
+define void @_runtime_error(i8* %0, i64 %1) local_unnamed_addr {
+  %3 = tail call i8* @GC_malloc(i64 16)
+  tail call void @GC_register_finalizer(i8* %3, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %4 = bitcast i8* %3 to { i8*, i64 }*
+  %5 = bitcast i8* %3 to i8**
+  store i8* %0, i8** %5, align 8
+  %6 = getelementptr inbounds i8, i8* %3, i64 8
+  %7 = bitcast i8* %6 to i64*
+  store i64 %1, i64* %7, align 4
+  %8 = tail call i1 @lla_exit_with_error({ i8*, i64 }* %4, i64 1)
+  ret void
+}
+
+define i64 @_binary_int_division(i64 %0, i64 %1) local_unnamed_addr {
+  %3 = icmp eq i64 %1, 0
+  br i1 %3, label %.preheader, label %11
+
+.preheader:                                       ; preds = %2
+  br label %4
+
+4:                                                ; preds = %.preheader, %4
+  %5 = tail call i8* @GC_malloc(i64 16)
+  tail call void @GC_register_finalizer(i8* %5, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %6 = bitcast i8* %5 to { i8*, i64 }*
+  %7 = bitcast i8* %5 to i8**
+  store i8* getelementptr inbounds ([33 x i8], [33 x i8]* @0, i64 0, i64 0), i8** %7, align 8
+  %8 = getelementptr inbounds i8, i8* %5, i64 8
+  %9 = bitcast i8* %8 to i64*
+  store i64 33, i64* %9, align 4
+  %10 = tail call i1 @lla_exit_with_error({ i8*, i64 }* %6, i64 1)
+  br label %4
+
+11:                                               ; preds = %2
+  %12 = sdiv i64 %0, %1
+  ret i64 %12
+}
+
+define float @_binary_float_division(float %0, float %1) local_unnamed_addr {
+  %3 = fcmp oeq float %1, 0.000000e+00
+  br i1 %3, label %.preheader, label %11
+
+.preheader:                                       ; preds = %2
+  br label %4
+
+4:                                                ; preds = %.preheader, %4
+  %5 = tail call i8* @GC_malloc(i64 16)
+  tail call void @GC_register_finalizer(i8* %5, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %6 = bitcast i8* %5 to { i8*, i64 }*
+  %7 = bitcast i8* %5 to i8**
+  store i8* getelementptr inbounds ([33 x i8], [33 x i8]* @0, i64 0, i64 0), i8** %7, align 8
+  %8 = getelementptr inbounds i8, i8* %5, i64 8
+  %9 = bitcast i8* %8 to i64*
+  store i64 33, i64* %9, align 4
+  %10 = tail call i1 @lla_exit_with_error({ i8*, i64 }* %6, i64 1)
+  br label %4
+
+11:                                               ; preds = %2
+  %12 = fdiv float %0, %1
+  ret float %12
+}
+
+define i64 @main() local_unnamed_addr {
+  %1 = alloca {}, align 8
+  %.reg2mem = alloca i64, align 8
+  %.reg2mem65 = alloca i64, align 8
+  %.reg2mem69 = alloca i64, align 8
+  %.reg2mem72 = alloca %0*, align 8
+  %.reg2mem75 = alloca i8*, align 8
+  %.reg2mem78 = alloca i8*, align 8
+  %.reg2mem81 = alloca %0*, align 8
+  %.reg2mem83 = alloca %0**, align 8
+  %.reg2mem89 = alloca %0**, align 8
+  %.reg2mem96 = alloca i8*, align 8
+  %.reg2mem98 = alloca i64, align 8
+  %.reg2mem100 = alloca %0*, align 8
+  %.reg2mem102 = alloca i64, align 8
+  %2 = tail call i8* @GC_init()
+  %3 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  store i8* %3, i8** %.reg2mem96, align 8
+  %4 = alloca { i64* }, align 8
+  store { i64* }* %4, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %5 = call i8* @GC_malloc(i64 8)
+  %6 = bitcast { i64* }* %4 to i8**
+  store i8* %5, i8** %6, align 8
+  %7 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %8 = getelementptr inbounds { i64* }, { i64* }* %7, i64 0, i32 0
+  %9 = load i64*, i64** %8, align 8
+  store i64 65, i64* %9, align 4
+  %10 = call i8* @GC_malloc(i64 8)
+  %11 = bitcast i8* %10 to %0**
+  store %0** %11, %0*** %.reg2mem89, align 8
+  store %0** %11, %0*** %.reg2mem83, align 8
+  %12 = call i8* @GC_malloc(i64 32)
+  %13 = bitcast i8* %12 to %0*
+  store %0* %13, %0** %.reg2mem81, align 8
+  %14 = bitcast i8* %12 to i64*
+  store i64 1, i64* %14, align 4
+  %15 = bitcast i8* %10 to i8**
+  store i8* %12, i8** %15, align 8
+  %16 = bitcast {}* %1 to i8*
+  store i8* %16, i8** %.reg2mem78, align 8
+  store i8* %16, i8** %.reg2mem75, align 8
+  %.reload82 = load %0*, %0** %.reg2mem81, align 8
+  store %0* %.reload82, %0** %.reg2mem100, align 8
+  store i64 1, i64* %.reg2mem102, align 4
+  br label %17
+
+17:                                               ; preds = %._crit_edge61, %0
+  %.reload103 = load i64, i64* %.reg2mem102, align 4
+  %.reload101 = load %0*, %0** %.reg2mem100, align 8
+  %.reload80 = load i8*, i8** %.reg2mem78, align 8
+  call void @llvm.lifetime.start.p0i8(i64 0, i8* nonnull %.reload80)
+  %18 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store {}* %1, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %.reload77 = load i8*, i8** %.reg2mem75, align 8
+  call void @llvm.lifetime.start.p0i8(i64 0, i8* nonnull %.reload77) #2
+  store {}* %1, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %19 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %20 = getelementptr inbounds { i64* }, { i64* }* %19, i64 0, i32 0
+  %21 = load i64*, i64** %20, align 8
+  %22 = load i64, i64* %21, align 4
+  %23 = mul i64 %22, 4241
+  %24 = add i64 %23, 22
+  %25 = srem i64 %24, 9949
+  store i64 %25, i64* %21, align 4
+  %26 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %27 = getelementptr inbounds { i64* }, { i64* }* %26, i64 0, i32 0
+  %28 = load i64*, i64** %27, align 8
+  %29 = load i64, i64* %28, align 4
+  %.reload76 = load i8*, i8** %.reg2mem75, align 8
+  call void @llvm.lifetime.end.p0i8(i64 0, i8* nonnull %.reload76) #2
+  %30 = srem i64 %29, 100
+  store i8* %18, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %.reload79 = load i8*, i8** %.reg2mem78, align 8
+  call void @llvm.lifetime.end.p0i8(i64 0, i8* nonnull %.reload79)
+  %31 = call %0* @"fn1:treeInsert"(%0* %.reload101, i64 %30)
+  store %0* %31, %0** %.reg2mem72, align 8
+  %.reload95 = load %0**, %0*** %.reg2mem89, align 8
+  store %0* %31, %0** %.reload95, align 8
+  %32 = add nuw nsw i64 %.reload103, 1
+  store i64 %32, i64* %.reg2mem69, align 4
+  %33 = icmp ult i64 %32, 11
+  br i1 %33, label %._crit_edge61, label %34
+
+._crit_edge61:                                    ; preds = %17
+  %.reload73 = load %0*, %0** %.reg2mem72, align 8
+  store %0* %.reload73, %0** %.reg2mem100, align 8
+  store i64 %32, i64* %.reg2mem102, align 4
+  br label %17
+
+34:                                               ; preds = %17
+  %35 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %35, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %36 = bitcast i8* %35 to { i8*, i64 }*
+  %37 = bitcast i8* %35 to i8**
+  store i8* getelementptr inbounds ([15 x i8], [15 x i8]* @6, i64 0, i64 0), i8** %37, align 8
+  %38 = getelementptr inbounds i8, i8* %35, i64 8
+  %39 = bitcast i8* %38 to i64*
+  store i64 15, i64* %39, align 4
+  %40 = call i1 @lla_print_string({ i8*, i64 }* %36)
+  %.reload93 = load %0**, %0*** %.reg2mem89, align 8
+  %41 = load %0*, %0** %.reload93, align 8
+  %42 = call i1 @"fn4:treePrint"(%0* %41)
+  %43 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %43, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %44 = bitcast i8* %43 to { i8*, i64 }*
+  %45 = bitcast i8* %43 to i8**
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @7, i64 0, i64 0), i8** %45, align 8
+  %46 = getelementptr inbounds i8, i8* %43, i64 8
+  %47 = bitcast i8* %46 to i64*
+  store i64 2, i64* %47, align 4
+  %48 = call i1 @lla_print_string({ i8*, i64 }* %44)
+  %.reload94 = load %0**, %0*** %.reg2mem89, align 8
+  %49 = load %0*, %0** %.reload94, align 8
+  %50 = call i64 @"fn5:treeCount"(%0* %49)
+  store i64 %50, i64* %.reg2mem65, align 4
+  %.not59 = icmp sgt i64 1, %50
+  br i1 %.not59, label %._crit_edge62, label %.lr.ph
+
+._crit_edge62:                                    ; preds = %34
+  br label %104
+
+.lr.ph:                                           ; preds = %34
+  br label %.peel.begin
+
+.peel.begin:                                      ; preds = %.lr.ph
+  br label %51
+
+51:                                               ; preds = %.peel.begin
+  %.reload92 = load %0**, %0*** %.reg2mem89, align 8
+  %52 = load %0*, %0** %.reload92, align 8
+  %53 = call i64 @"fn8:choose"(%0* %52)
+  %54 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %54, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %55 = bitcast i8* %54 to { i8*, i64 }*
+  %56 = bitcast i8* %54 to i8**
+  store i8* getelementptr inbounds ([10 x i8], [10 x i8]* @8, i64 0, i64 0), i8** %56, align 8
+  %57 = getelementptr inbounds i8, i8* %54, i64 8
+  %58 = bitcast i8* %57 to i64*
+  store i64 10, i64* %58, align 4
+  %59 = call i1 @lla_print_string({ i8*, i64 }* %55)
+  %60 = call i1 @lla_print_int(i64 %53)
+  %61 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %61, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %62 = bitcast i8* %61 to { i8*, i64 }*
+  %63 = bitcast i8* %61 to i8**
+  store i8* getelementptr inbounds ([3 x i8], [3 x i8]* @9, i64 0, i64 0), i8** %63, align 8
+  %64 = getelementptr inbounds i8, i8* %61, i64 8
+  %65 = bitcast i8* %64 to i64*
+  store i64 3, i64* %65, align 4
+  %66 = call i1 @lla_print_string({ i8*, i64 }* %62)
+  %.reload91 = load %0**, %0*** %.reg2mem89, align 8
+  %67 = load %0*, %0** %.reload91, align 8
+  %68 = call %0* @"fn3:treeDelete"(%0* %67, i64 %53)
+  %.reload90 = load %0**, %0*** %.reg2mem89, align 8
+  store %0* %68, %0** %.reload90, align 8
+  %.reload87 = load %0**, %0*** %.reg2mem83, align 8
+  %69 = load %0*, %0** %.reload87, align 8
+  %70 = call i1 @"fn4:treePrint"(%0* %69)
+  %71 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %71, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %72 = bitcast i8* %71 to { i8*, i64 }*
+  %73 = bitcast i8* %71 to i8**
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @7, i64 0, i64 0), i8** %73, align 8
+  %74 = getelementptr inbounds i8, i8* %71, i64 8
+  %75 = bitcast i8* %74 to i64*
+  store i64 2, i64* %75, align 4
+  %76 = call i1 @lla_print_string({ i8*, i64 }* %72)
+  %.reload66 = load i64, i64* %.reg2mem65, align 4
+  %.not.peel = icmp sgt i64 2, %.reload66
+  br i1 %.not.peel, label %.._crit_edge_crit_edge, label %.peel.next
+
+.._crit_edge_crit_edge:                           ; preds = %51
+  br label %._crit_edge
+
+.peel.next:                                       ; preds = %51
+  br label %.peel.next60
+
+.peel.next60:                                     ; preds = %.peel.next
+  br label %.lr.ph.peel.newph
+
+.lr.ph.peel.newph:                                ; preds = %.peel.next60
+  store i64 2, i64* %.reg2mem98, align 4
+  br label %77
+
+77:                                               ; preds = %._crit_edge63, %.lr.ph.peel.newph
+  %.reload99 = load i64, i64* %.reg2mem98, align 4
+  %.reload86 = load %0**, %0*** %.reg2mem83, align 8
+  %78 = load %0*, %0** %.reload86, align 8
+  %79 = call i64 @"fn8:choose"(%0* %78)
+  %80 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %80, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %81 = bitcast i8* %80 to { i8*, i64 }*
+  %82 = bitcast i8* %80 to i8**
+  store i8* getelementptr inbounds ([10 x i8], [10 x i8]* @8, i64 0, i64 0), i8** %82, align 8
+  %83 = getelementptr inbounds i8, i8* %80, i64 8
+  %84 = bitcast i8* %83 to i64*
+  store i64 10, i64* %84, align 4
+  %85 = call i1 @lla_print_string({ i8*, i64 }* %81)
+  %86 = call i1 @lla_print_int(i64 %79)
+  %87 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %87, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %88 = bitcast i8* %87 to { i8*, i64 }*
+  %89 = bitcast i8* %87 to i8**
+  store i8* getelementptr inbounds ([3 x i8], [3 x i8]* @9, i64 0, i64 0), i8** %89, align 8
+  %90 = getelementptr inbounds i8, i8* %87, i64 8
+  %91 = bitcast i8* %90 to i64*
+  store i64 3, i64* %91, align 4
+  %92 = call i1 @lla_print_string({ i8*, i64 }* %88)
+  %.reload84 = load %0**, %0*** %.reg2mem83, align 8
+  %93 = load %0*, %0** %.reload84, align 8
+  %94 = call %0* @"fn3:treeDelete"(%0* %93, i64 %79)
+  %.reload85 = load %0**, %0*** %.reg2mem83, align 8
+  store %0* %94, %0** %.reload85, align 8
+  %.reload88 = load %0**, %0*** %.reg2mem83, align 8
+  %95 = load %0*, %0** %.reload88, align 8
+  %96 = call i1 @"fn4:treePrint"(%0* %95)
+  %97 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %97, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %98 = bitcast i8* %97 to { i8*, i64 }*
+  %99 = bitcast i8* %97 to i8**
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @7, i64 0, i64 0), i8** %99, align 8
+  %100 = getelementptr inbounds i8, i8* %97, i64 8
+  %101 = bitcast i8* %100 to i64*
+  store i64 2, i64* %101, align 4
+  %102 = call i1 @lla_print_string({ i8*, i64 }* %98)
+  %103 = add i64 %.reload99, 1
+  store i64 %103, i64* %.reg2mem, align 4
+  %.reload68 = load i64, i64* %.reg2mem65, align 4
+  %.not = icmp sgt i64 %103, %.reload68
+  br i1 %.not, label %._crit_edge.loopexit, label %._crit_edge63, !llvm.loop !0
+
+._crit_edge63:                                    ; preds = %77
+  store i64 %103, i64* %.reg2mem98, align 4
+  br label %77
+
+._crit_edge.loopexit:                             ; preds = %77
+  br label %._crit_edge
+
+._crit_edge:                                      ; preds = %.._crit_edge_crit_edge, %._crit_edge.loopexit
+  br label %104
+
+104:                                              ; preds = %._crit_edge62, %._crit_edge
+  %.reload97 = load i8*, i8** %.reg2mem96, align 8
+  store i8* %.reload97, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  ret i64 0
+}
+
+define i1 @"_tree:1_equality"(%0* nocapture readonly %0, %0* nocapture readonly %1) local_unnamed_addr {
+  %.reg2mem = alloca i1, align 1
+  %.reg2mem21 = alloca %0*, align 8
+  %.reg2mem23 = alloca %0*, align 8
+  %.reg2mem25 = alloca i64, align 8
+  %.tr20.reg2mem = alloca %0*, align 8
+  %.tr.reg2mem = alloca %0*, align 8
+  %accumulator.tr.reg2mem = alloca i1, align 1
+  %.reg2mem37 = alloca i1, align 1
+  %.tr20.reg2mem39 = alloca %0*, align 8
+  %.tr.reg2mem41 = alloca %0*, align 8
+  %accumulator.tr.reg2mem43 = alloca i1, align 1
+  store %0* %1, %0** %.tr20.reg2mem39, align 8
+  store %0* %0, %0** %.tr.reg2mem41, align 8
+  store i1 true, i1* %accumulator.tr.reg2mem43, align 1
+  br label %tailrecurse
+
+tailrecurse:                                      ; preds = %9, %2
+  %accumulator.tr.reload44 = load i1, i1* %accumulator.tr.reg2mem43, align 1
+  %.tr.reload42 = load %0*, %0** %.tr.reg2mem41, align 8
+  %.tr20.reload40 = load %0*, %0** %.tr20.reg2mem39, align 8
+  store i1 %accumulator.tr.reload44, i1* %accumulator.tr.reg2mem, align 1
+  store %0* %.tr.reload42, %0** %.tr.reg2mem, align 8
+  store %0* %.tr20.reload40, %0** %.tr20.reg2mem, align 8
+  %.tr.reload = load %0*, %0** %.tr.reg2mem, align 8
+  %3 = getelementptr inbounds %0, %0* %.tr.reload, i64 0, i32 0
+  %4 = load i64, i64* %3, align 4
+  store i64 %4, i64* %.reg2mem25, align 4
+  %.tr20.reload = load %0*, %0** %.tr20.reg2mem, align 8
+  %5 = getelementptr inbounds %0, %0* %.tr20.reload, i64 0, i32 0
+  %6 = load i64, i64* %5, align 4
+  %7 = icmp eq i64 %4, %6
+  br i1 %7, label %8, label %tailrecurse._crit_edge
+
+tailrecurse._crit_edge:                           ; preds = %tailrecurse
+  store i1 false, i1* %.reg2mem37, align 1
+  br label %33
+
+8:                                                ; preds = %tailrecurse
+  br label %NodeBlock
+
+NodeBlock:                                        ; preds = %8
+  %Pivot = icmp slt i64 %4, 2
+  br i1 %Pivot, label %LeafBlock, label %LeafBlock18
+
+LeafBlock18:                                      ; preds = %NodeBlock
+  %SwitchLeaf19 = icmp eq i64 %4, 2
+  br i1 %SwitchLeaf19, label %9, label %LeafBlock18.NewDefault_crit_edge
+
+LeafBlock18.NewDefault_crit_edge:                 ; preds = %LeafBlock18
+  br label %NewDefault
+
+LeafBlock:                                        ; preds = %NodeBlock
+  %SwitchLeaf = icmp eq i64 %4, 1
+  br i1 %SwitchLeaf, label %LeafBlock._crit_edge, label %LeafBlock.NewDefault_crit_edge
+
+LeafBlock.NewDefault_crit_edge:                   ; preds = %LeafBlock
+  br label %NewDefault
+
+LeafBlock._crit_edge:                             ; preds = %LeafBlock
+  store i1 true, i1* %.reg2mem37, align 1
+  br label %33
+
+NewDefault:                                       ; preds = %LeafBlock.NewDefault_crit_edge, %LeafBlock18.NewDefault_crit_edge
+  br label %.preheader
+
+.preheader:                                       ; preds = %NewDefault
+  br label %26
+
+9:                                                ; preds = %LeafBlock18
+  %10 = getelementptr inbounds %0, %0* %.tr20.reload, i64 0, i32 1
+  %11 = load i64, i64* %10, align 4
+  %.tr.reload33 = load %0*, %0** %.tr.reg2mem, align 8
+  %12 = getelementptr inbounds %0, %0* %.tr.reload33, i64 0, i32 1
+  %13 = load i64, i64* %12, align 4
+  %14 = getelementptr inbounds %0, %0* %.tr20.reload, i64 0, i32 2
+  %15 = load %0*, %0** %14, align 8
+  %16 = getelementptr inbounds %0, %0* %.tr.reload33, i64 0, i32 2
+  %17 = load %0*, %0** %16, align 8
+  %18 = getelementptr inbounds %0, %0* %.tr20.reload, i64 0, i32 3
+  %19 = load %0*, %0** %18, align 8
+  store %0* %19, %0** %.reg2mem23, align 8
+  %.tr.reload35 = load %0*, %0** %.tr.reg2mem, align 8
+  %20 = getelementptr inbounds %0, %0* %.tr.reload35, i64 0, i32 3
+  %21 = load %0*, %0** %20, align 8
+  store %0* %21, %0** %.reg2mem21, align 8
+  %22 = icmp eq i64 %13, %11
+  %23 = tail call i1 @"_tree:1_equality"(%0* %17, %0* %15)
+  %24 = and i1 %22, %23
+  %accumulator.tr.reload36 = load i1, i1* %accumulator.tr.reg2mem, align 1
+  %25 = and i1 %24, %accumulator.tr.reload36
+  store i1 %25, i1* %.reg2mem, align 1
+  %.reload22 = load %0*, %0** %.reg2mem21, align 8
+  %.reload24 = load %0*, %0** %.reg2mem23, align 8
+  store %0* %.reload24, %0** %.tr20.reg2mem39, align 8
+  store %0* %.reload22, %0** %.tr.reg2mem41, align 8
+  store i1 %25, i1* %accumulator.tr.reg2mem43, align 1
+  br label %tailrecurse
+
+26:                                               ; preds = %.preheader, %26
+  %27 = tail call i8* @GC_malloc(i64 16)
+  tail call void @GC_register_finalizer(i8* %27, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %28 = bitcast i8* %27 to { i8*, i64 }*
+  %29 = bitcast i8* %27 to i8**
+  store i8* getelementptr inbounds ([85 x i8], [85 x i8]* @1, i64 0, i64 0), i8** %29, align 8
+  %30 = getelementptr inbounds i8, i8* %27, i64 8
+  %31 = bitcast i8* %30 to i64*
+  store i64 85, i64* %31, align 4
+  %32 = tail call i1 @lla_exit_with_error({ i8*, i64 }* %28, i64 1)
+  br label %26
+
+33:                                               ; preds = %LeafBlock._crit_edge, %tailrecurse._crit_edge
+  %.reload38 = load i1, i1* %.reg2mem37, align 1
+  %accumulator.tr.reload = load i1, i1* %accumulator.tr.reg2mem, align 1
+  %accumulator.ret.tr = and i1 %.reload38, %accumulator.tr.reload
+  ret i1 %accumulator.ret.tr
+}
+
+define %0* @"fn1:treeInsert"(%0* %0, i64 %1) local_unnamed_addr {
+  %3 = alloca {}, align 8
+  %.reg2mem = alloca %0*, align 8
+  %.reg2mem49 = alloca %0*, align 8
+  %.reg2mem51 = alloca %0*, align 8
+  %.reg2mem54 = alloca %0*, align 8
+  %.reg2mem57 = alloca i64, align 8
+  %.reg2mem62 = alloca %0*, align 8
+  %.reg2mem64 = alloca i64, align 8
+  %.reg2mem67 = alloca i8*, align 8
+  %.reg2mem69 = alloca %0*, align 8
+  %4 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %4, i8** %.reg2mem67, align 8
+  store {}* %3, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %5 = getelementptr inbounds %0, %0* %0, i64 0, i32 0
+  %6 = load i64, i64* %5, align 4
+  store i64 %6, i64* %.reg2mem64, align 4
+  %7 = icmp eq i64 %6, 1
+  br i1 %7, label %8, label %22
+
+8:                                                ; preds = %2
+  %9 = call i8* @GC_malloc(i64 32)
+  %10 = bitcast i8* %9 to %0*
+  store %0* %10, %0** %.reg2mem62, align 8
+  %11 = bitcast i8* %9 to i64*
+  store i64 2, i64* %11, align 4
+  %12 = call i8* @GC_malloc(i64 32)
+  %13 = bitcast i8* %12 to i64*
+  store i64 1, i64* %13, align 4
+  %14 = call i8* @GC_malloc(i64 32)
+  %15 = bitcast i8* %14 to i64*
+  store i64 1, i64* %15, align 4
+  %16 = getelementptr inbounds i8, i8* %9, i64 8
+  %17 = bitcast i8* %16 to i64*
+  store i64 %1, i64* %17, align 4
+  %18 = getelementptr inbounds i8, i8* %9, i64 16
+  %19 = bitcast i8* %18 to i8**
+  store i8* %12, i8** %19, align 8
+  %20 = getelementptr inbounds i8, i8* %9, i64 24
+  %21 = bitcast i8* %20 to i8**
+  store i8* %14, i8** %21, align 8
+  %.reload63 = load %0*, %0** %.reg2mem62, align 8
+  store %0* %.reload63, %0** %.reg2mem69, align 8
+  br label %63
+
+22:                                               ; preds = %2
+  %23 = icmp eq i64 %6, 2
+  br i1 %23, label %24, label %.preheader
+
+.preheader:                                       ; preds = %22
+  br label %56
+
+24:                                               ; preds = %22
+  %25 = getelementptr inbounds %0, %0* %0, i64 0, i32 1
+  %26 = load i64, i64* %25, align 4
+  store i64 %26, i64* %.reg2mem57, align 4
+  %27 = getelementptr inbounds %0, %0* %0, i64 0, i32 2
+  %28 = load %0*, %0** %27, align 8
+  store %0* %28, %0** %.reg2mem54, align 8
+  %29 = getelementptr inbounds %0, %0* %0, i64 0, i32 3
+  %30 = load %0*, %0** %29, align 8
+  store %0* %30, %0** %.reg2mem51, align 8
+  %.reload61 = load i64, i64* %.reg2mem57, align 4
+  %31 = icmp sgt i64 %.reload61, %1
+  br i1 %31, label %32, label %43
+
+32:                                               ; preds = %24
+  %33 = call i8* @GC_malloc(i64 32)
+  %34 = bitcast i8* %33 to %0*
+  store %0* %34, %0** %.reg2mem49, align 8
+  %35 = bitcast i8* %33 to i64*
+  store i64 2, i64* %35, align 4
+  %.reload55 = load %0*, %0** %.reg2mem54, align 8
+  %36 = call %0* @"fn1:treeInsert"(%0* %.reload55, i64 %1)
+  %37 = getelementptr inbounds i8, i8* %33, i64 8
+  %38 = bitcast i8* %37 to i64*
+  %.reload58 = load i64, i64* %.reg2mem57, align 4
+  store i64 %.reload58, i64* %38, align 4
+  %39 = getelementptr inbounds i8, i8* %33, i64 16
+  %40 = bitcast i8* %39 to %0**
+  store %0* %36, %0** %40, align 8
+  %41 = getelementptr inbounds i8, i8* %33, i64 24
+  %42 = bitcast i8* %41 to %0**
+  %.reload52 = load %0*, %0** %.reg2mem51, align 8
+  store %0* %.reload52, %0** %42, align 8
+  %.reload50 = load %0*, %0** %.reg2mem49, align 8
+  store %0* %.reload50, %0** %.reg2mem69, align 8
+  br label %63
+
+43:                                               ; preds = %24
+  %44 = icmp slt i64 %.reload61, %1
+  br i1 %44, label %45, label %._crit_edge
+
+._crit_edge:                                      ; preds = %43
+  store %0* %0, %0** %.reg2mem69, align 8
+  br label %63
+
+45:                                               ; preds = %43
+  %46 = call i8* @GC_malloc(i64 32)
+  %47 = bitcast i8* %46 to %0*
+  store %0* %47, %0** %.reg2mem, align 8
+  %48 = bitcast i8* %46 to i64*
+  store i64 2, i64* %48, align 4
+  %.reload53 = load %0*, %0** %.reg2mem51, align 8
+  %49 = call %0* @"fn1:treeInsert"(%0* %.reload53, i64 %1)
+  %50 = getelementptr inbounds i8, i8* %46, i64 8
+  %51 = bitcast i8* %50 to i64*
+  %.reload59 = load i64, i64* %.reg2mem57, align 4
+  store i64 %.reload59, i64* %51, align 4
+  %52 = getelementptr inbounds i8, i8* %46, i64 16
+  %53 = bitcast i8* %52 to %0**
+  %.reload56 = load %0*, %0** %.reg2mem54, align 8
+  store %0* %.reload56, %0** %53, align 8
+  %54 = getelementptr inbounds i8, i8* %46, i64 24
+  %55 = bitcast i8* %54 to %0**
+  store %0* %49, %0** %55, align 8
+  %.reload = load %0*, %0** %.reg2mem, align 8
+  store %0* %.reload, %0** %.reg2mem69, align 8
+  br label %63
+
+56:                                               ; preds = %.preheader, %56
+  %57 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %57, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %58 = bitcast i8* %57 to { i8*, i64 }*
+  %59 = bitcast i8* %57 to i8**
+  store i8* getelementptr inbounds ([71 x i8], [71 x i8]* @2, i64 0, i64 0), i8** %59, align 8
+  %60 = getelementptr inbounds i8, i8* %57, i64 8
+  %61 = bitcast i8* %60 to i64*
+  store i64 71, i64* %61, align 4
+  %62 = call i1 @lla_exit_with_error({ i8*, i64 }* %58, i64 1)
+  br label %56
+
+63:                                               ; preds = %._crit_edge, %32, %45, %8
+  %.reload70 = load %0*, %0** %.reg2mem69, align 8
+  %.reload68 = load i8*, i8** %.reg2mem67, align 8
+  store i8* %.reload68, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret %0* %.reload70
+}
+
+define %0* @"fn2:treeMerge"(%0* %0, %0* %1) local_unnamed_addr {
+  %3 = alloca {}, align 8
+  %.reg2mem = alloca %0*, align 8
+  %.reg2mem16 = alloca i64, align 8
+  %.reg2mem19 = alloca i8*, align 8
+  %.reg2mem21 = alloca %0*, align 8
+  %4 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %4, i8** %.reg2mem19, align 8
+  store {}* %3, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %5 = getelementptr inbounds %0, %0* %0, i64 0, i32 0
+  %6 = load i64, i64* %5, align 4
+  store i64 %6, i64* %.reg2mem16, align 4
+  %7 = icmp eq i64 %6, 1
+  br i1 %7, label %._crit_edge, label %8
+
+._crit_edge:                                      ; preds = %2
+  store %0* %1, %0** %.reg2mem21, align 8
+  br label %34
+
+8:                                                ; preds = %2
+  %9 = icmp eq i64 %6, 2
+  br i1 %9, label %10, label %.preheader
+
+.preheader:                                       ; preds = %8
+  br label %27
+
+10:                                               ; preds = %8
+  %11 = getelementptr inbounds %0, %0* %0, i64 0, i32 1
+  %12 = load i64, i64* %11, align 4
+  %13 = getelementptr inbounds %0, %0* %0, i64 0, i32 2
+  %14 = load %0*, %0** %13, align 8
+  %15 = getelementptr inbounds %0, %0* %0, i64 0, i32 3
+  %16 = load %0*, %0** %15, align 8
+  %17 = call i8* @GC_malloc(i64 32)
+  %18 = bitcast i8* %17 to %0*
+  store %0* %18, %0** %.reg2mem, align 8
+  %19 = bitcast i8* %17 to i64*
+  store i64 2, i64* %19, align 4
+  %20 = call %0* @"fn2:treeMerge"(%0* %16, %0* %1)
+  %21 = getelementptr inbounds i8, i8* %17, i64 8
+  %22 = bitcast i8* %21 to i64*
+  store i64 %12, i64* %22, align 4
+  %23 = getelementptr inbounds i8, i8* %17, i64 16
+  %24 = bitcast i8* %23 to %0**
+  store %0* %14, %0** %24, align 8
+  %25 = getelementptr inbounds i8, i8* %17, i64 24
+  %26 = bitcast i8* %25 to %0**
+  store %0* %20, %0** %26, align 8
+  %.reload = load %0*, %0** %.reg2mem, align 8
+  store %0* %.reload, %0** %.reg2mem21, align 8
+  br label %34
+
+27:                                               ; preds = %.preheader, %27
+  %28 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %28, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %29 = bitcast i8* %28 to { i8*, i64 }*
+  %30 = bitcast i8* %28 to i8**
+  store i8* getelementptr inbounds ([71 x i8], [71 x i8]* @2, i64 0, i64 0), i8** %30, align 8
+  %31 = getelementptr inbounds i8, i8* %28, i64 8
+  %32 = bitcast i8* %31 to i64*
+  store i64 71, i64* %32, align 4
+  %33 = call i1 @lla_exit_with_error({ i8*, i64 }* %29, i64 1)
+  br label %27
+
+34:                                               ; preds = %._crit_edge, %10
+  %.reload22 = load %0*, %0** %.reg2mem21, align 8
+  %.reload20 = load i8*, i8** %.reg2mem19, align 8
+  store i8* %.reload20, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret %0* %.reload22
+}
+
+define %0* @"fn3:treeDelete"(%0* %0, i64 %1) local_unnamed_addr {
+  %3 = alloca {}, align 8
+  %.reg2mem = alloca %0*, align 8
+  %.reg2mem39 = alloca %0*, align 8
+  %.reg2mem41 = alloca %0*, align 8
+  %.reg2mem43 = alloca %0*, align 8
+  %.reg2mem47 = alloca %0*, align 8
+  %.reg2mem51 = alloca i64, align 8
+  %.reg2mem56 = alloca i64, align 8
+  %.reg2mem59 = alloca i8*, align 8
+  %.reg2mem61 = alloca %0*, align 8
+  %4 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %4, i8** %.reg2mem59, align 8
+  store {}* %3, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %5 = getelementptr inbounds %0, %0* %0, i64 0, i32 0
+  %6 = load i64, i64* %5, align 4
+  store i64 %6, i64* %.reg2mem56, align 4
+  %7 = icmp eq i64 %6, 1
+  br i1 %7, label %._crit_edge, label %8
+
+._crit_edge:                                      ; preds = %2
+  store %0* %0, %0** %.reg2mem61, align 8
+  br label %51
+
+8:                                                ; preds = %2
+  %9 = icmp eq i64 %6, 2
+  br i1 %9, label %10, label %.preheader
+
+.preheader:                                       ; preds = %8
+  br label %44
+
+10:                                               ; preds = %8
+  %11 = getelementptr inbounds %0, %0* %0, i64 0, i32 1
+  %12 = load i64, i64* %11, align 4
+  store i64 %12, i64* %.reg2mem51, align 4
+  %13 = getelementptr inbounds %0, %0* %0, i64 0, i32 2
+  %14 = load %0*, %0** %13, align 8
+  store %0* %14, %0** %.reg2mem47, align 8
+  %15 = getelementptr inbounds %0, %0* %0, i64 0, i32 3
+  %16 = load %0*, %0** %15, align 8
+  store %0* %16, %0** %.reg2mem43, align 8
+  %.reload55 = load i64, i64* %.reg2mem51, align 4
+  %17 = icmp sgt i64 %.reload55, %1
+  br i1 %17, label %18, label %29
+
+18:                                               ; preds = %10
+  %19 = call i8* @GC_malloc(i64 32)
+  %20 = bitcast i8* %19 to %0*
+  store %0* %20, %0** %.reg2mem41, align 8
+  %21 = bitcast i8* %19 to i64*
+  store i64 2, i64* %21, align 4
+  %.reload48 = load %0*, %0** %.reg2mem47, align 8
+  %22 = call %0* @"fn3:treeDelete"(%0* %.reload48, i64 %1)
+  %23 = getelementptr inbounds i8, i8* %19, i64 8
+  %24 = bitcast i8* %23 to i64*
+  %.reload52 = load i64, i64* %.reg2mem51, align 4
+  store i64 %.reload52, i64* %24, align 4
+  %25 = getelementptr inbounds i8, i8* %19, i64 16
+  %26 = bitcast i8* %25 to %0**
+  store %0* %22, %0** %26, align 8
+  %27 = getelementptr inbounds i8, i8* %19, i64 24
+  %28 = bitcast i8* %27 to %0**
+  %.reload44 = load %0*, %0** %.reg2mem43, align 8
+  store %0* %.reload44, %0** %28, align 8
+  %.reload42 = load %0*, %0** %.reg2mem41, align 8
+  store %0* %.reload42, %0** %.reg2mem61, align 8
+  br label %51
+
+29:                                               ; preds = %10
+  %30 = icmp slt i64 %.reload55, %1
+  br i1 %30, label %31, label %42
+
+31:                                               ; preds = %29
+  %32 = call i8* @GC_malloc(i64 32)
+  %33 = bitcast i8* %32 to %0*
+  store %0* %33, %0** %.reg2mem39, align 8
+  %34 = bitcast i8* %32 to i64*
+  store i64 2, i64* %34, align 4
+  %.reload45 = load %0*, %0** %.reg2mem43, align 8
+  %35 = call %0* @"fn3:treeDelete"(%0* %.reload45, i64 %1)
+  %36 = getelementptr inbounds i8, i8* %32, i64 8
+  %37 = bitcast i8* %36 to i64*
+  %.reload53 = load i64, i64* %.reg2mem51, align 4
+  store i64 %.reload53, i64* %37, align 4
+  %38 = getelementptr inbounds i8, i8* %32, i64 16
+  %39 = bitcast i8* %38 to %0**
+  %.reload49 = load %0*, %0** %.reg2mem47, align 8
+  store %0* %.reload49, %0** %39, align 8
+  %40 = getelementptr inbounds i8, i8* %32, i64 24
+  %41 = bitcast i8* %40 to %0**
+  store %0* %35, %0** %41, align 8
+  %.reload40 = load %0*, %0** %.reg2mem39, align 8
+  store %0* %.reload40, %0** %.reg2mem61, align 8
+  br label %51
+
+42:                                               ; preds = %29
+  %.reload50 = load %0*, %0** %.reg2mem47, align 8
+  %43 = call %0* @"fn2:treeMerge"(%0* %.reload50, %0* %16)
+  store %0* %43, %0** %.reg2mem, align 8
+  store %0* %43, %0** %.reg2mem61, align 8
+  br label %51
+
+44:                                               ; preds = %.preheader, %44
+  %45 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %45, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %46 = bitcast i8* %45 to { i8*, i64 }*
+  %47 = bitcast i8* %45 to i8**
+  store i8* getelementptr inbounds ([71 x i8], [71 x i8]* @2, i64 0, i64 0), i8** %47, align 8
+  %48 = getelementptr inbounds i8, i8* %45, i64 8
+  %49 = bitcast i8* %48 to i64*
+  store i64 71, i64* %49, align 4
+  %50 = call i1 @lla_exit_with_error({ i8*, i64 }* %46, i64 1)
+  br label %44
+
+51:                                               ; preds = %._crit_edge, %18, %42, %31
+  %.reload62 = load %0*, %0** %.reg2mem61, align 8
+  %.reload60 = load i8*, i8** %.reg2mem59, align 8
+  store i8* %.reload60, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret %0* %.reload62
+}
+
+define i1 @"fn4:treePrint"(%0* %0) local_unnamed_addr {
+  %2 = alloca {}, align 8
+  %.reg2mem = alloca i1, align 1
+  %.reg2mem26 = alloca i64, align 8
+  %.reg2mem29 = alloca i8*, align 8
+  %.reg2mem31 = alloca i1, align 1
+  %3 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %3, i8** %.reg2mem29, align 8
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %4 = getelementptr inbounds %0, %0* %0, i64 0, i32 0
+  %5 = load i64, i64* %4, align 4
+  store i64 %5, i64* %.reg2mem26, align 4
+  %6 = icmp eq i64 %5, 1
+  br i1 %6, label %._crit_edge, label %7
+
+._crit_edge:                                      ; preds = %1
+  store i1 false, i1* %.reg2mem31, align 1
+  br label %44
+
+7:                                                ; preds = %1
+  %8 = icmp eq i64 %5, 2
+  br i1 %8, label %9, label %.preheader
+
+.preheader:                                       ; preds = %7
+  br label %37
+
+9:                                                ; preds = %7
+  %10 = getelementptr inbounds %0, %0* %0, i64 0, i32 1
+  %11 = load i64, i64* %10, align 4
+  %12 = getelementptr inbounds %0, %0* %0, i64 0, i32 2
+  %13 = load %0*, %0** %12, align 8
+  %14 = getelementptr inbounds %0, %0* %0, i64 0, i32 3
+  %15 = load %0*, %0** %14, align 8
+  %16 = call i1 @lla_print_int(i64 %11)
+  %17 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %17, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %18 = bitcast i8* %17 to { i8*, i64 }*
+  %19 = bitcast i8* %17 to i8**
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @3, i64 0, i64 0), i8** %19, align 8
+  %20 = getelementptr inbounds i8, i8* %17, i64 8
+  %21 = bitcast i8* %20 to i64*
+  store i64 2, i64* %21, align 4
+  %22 = call i1 @lla_print_string({ i8*, i64 }* %18)
+  %23 = call i1 @"fn4:treePrint"(%0* %13)
+  %24 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %24, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %25 = bitcast i8* %24 to { i8*, i64 }*
+  %26 = bitcast i8* %24 to i8**
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @4, i64 0, i64 0), i8** %26, align 8
+  %27 = getelementptr inbounds i8, i8* %24, i64 8
+  %28 = bitcast i8* %27 to i64*
+  store i64 2, i64* %28, align 4
+  %29 = call i1 @lla_print_string({ i8*, i64 }* %25)
+  %30 = call i1 @"fn4:treePrint"(%0* %15)
+  %31 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %31, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %32 = bitcast i8* %31 to { i8*, i64 }*
+  %33 = bitcast i8* %31 to i8**
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @5, i64 0, i64 0), i8** %33, align 8
+  %34 = getelementptr inbounds i8, i8* %31, i64 8
+  %35 = bitcast i8* %34 to i64*
+  store i64 2, i64* %35, align 4
+  %36 = call i1 @lla_print_string({ i8*, i64 }* %32)
+  store i1 %36, i1* %.reg2mem, align 1
+  store i1 %36, i1* %.reg2mem31, align 1
+  br label %44
+
+37:                                               ; preds = %.preheader, %37
+  %38 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %38, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %39 = bitcast i8* %38 to { i8*, i64 }*
+  %40 = bitcast i8* %38 to i8**
+  store i8* getelementptr inbounds ([71 x i8], [71 x i8]* @2, i64 0, i64 0), i8** %40, align 8
+  %41 = getelementptr inbounds i8, i8* %38, i64 8
+  %42 = bitcast i8* %41 to i64*
+  store i64 71, i64* %42, align 4
+  %43 = call i1 @lla_exit_with_error({ i8*, i64 }* %39, i64 1)
+  br label %37
+
+44:                                               ; preds = %._crit_edge, %9
+  %.reload32 = load i1, i1* %.reg2mem31, align 1
+  %.reload30 = load i8*, i8** %.reg2mem29, align 8
+  store i8* %.reload30, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i1 %.reload32
+}
+
+define i64 @"fn5:treeCount"(%0* %0) local_unnamed_addr {
+  %2 = alloca {}, align 8
+  %.reg2mem = alloca i64, align 8
+  %.reg2mem13 = alloca i64, align 8
+  %.reg2mem16 = alloca i8*, align 8
+  %.reg2mem18 = alloca i64, align 8
+  %3 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %3, i8** %.reg2mem16, align 8
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %4 = getelementptr inbounds %0, %0* %0, i64 0, i32 0
+  %5 = load i64, i64* %4, align 4
+  store i64 %5, i64* %.reg2mem13, align 4
+  %6 = icmp eq i64 %5, 1
+  br i1 %6, label %._crit_edge, label %7
+
+._crit_edge:                                      ; preds = %1
+  store i64 0, i64* %.reg2mem18, align 4
+  br label %25
+
+7:                                                ; preds = %1
+  %8 = icmp eq i64 %5, 2
+  br i1 %8, label %9, label %.preheader
+
+.preheader:                                       ; preds = %7
+  br label %18
+
+9:                                                ; preds = %7
+  %10 = getelementptr inbounds %0, %0* %0, i64 0, i32 2
+  %11 = load %0*, %0** %10, align 8
+  %12 = getelementptr inbounds %0, %0* %0, i64 0, i32 3
+  %13 = load %0*, %0** %12, align 8
+  %14 = call i64 @"fn5:treeCount"(%0* %11)
+  %15 = add i64 %14, 1
+  %16 = call i64 @"fn5:treeCount"(%0* %13)
+  %17 = add i64 %15, %16
+  store i64 %17, i64* %.reg2mem, align 4
+  store i64 %17, i64* %.reg2mem18, align 4
+  br label %25
+
+18:                                               ; preds = %.preheader, %18
+  %19 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %19, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %20 = bitcast i8* %19 to { i8*, i64 }*
+  %21 = bitcast i8* %19 to i8**
+  store i8* getelementptr inbounds ([71 x i8], [71 x i8]* @2, i64 0, i64 0), i8** %21, align 8
+  %22 = getelementptr inbounds i8, i8* %19, i64 8
+  %23 = bitcast i8* %22 to i64*
+  store i64 71, i64* %23, align 4
+  %24 = call i1 @lla_exit_with_error({ i8*, i64 }* %20, i64 1)
+  br label %18
+
+25:                                               ; preds = %._crit_edge, %9
+  %.reload19 = load i64, i64* %.reg2mem18, align 4
+  %.reload17 = load i8*, i8** %.reg2mem16, align 8
+  store i8* %.reload17, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i64 %.reload19
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn
+define i64 @"fn6:next"(i1 %0) local_unnamed_addr #0 {
+  %2 = alloca {}, align 8
+  %3 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %4 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %5 = getelementptr inbounds { i64* }, { i64* }* %4, i64 0, i32 0
+  %6 = load i64*, i64** %5, align 8
+  %7 = load i64, i64* %6, align 4
+  %8 = mul i64 %7, 4241
+  %9 = add i64 %8, 22
+  %10 = srem i64 %9, 9949
+  store i64 %10, i64* %6, align 4
+  %11 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %12 = getelementptr inbounds { i64* }, { i64* }* %11, i64 0, i32 0
+  %13 = load i64*, i64** %12, align 8
+  %14 = load i64, i64* %13, align 4
+  store i8* %3, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i64 %14
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn
+define i64 @"fn7:random"(i64 %0) local_unnamed_addr #0 {
+  %2 = alloca {}, align 8
+  %3 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %4 = bitcast {}* %2 to i8*
+  call void @llvm.lifetime.start.p0i8(i64 0, i8* nonnull %4)
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %5 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %6 = getelementptr inbounds { i64* }, { i64* }* %5, i64 0, i32 0
+  %7 = load i64*, i64** %6, align 8
+  %8 = load i64, i64* %7, align 4
+  %9 = mul i64 %8, 4241
+  %10 = add i64 %9, 22
+  %11 = srem i64 %10, 9949
+  store i64 %11, i64* %7, align 4
+  %12 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %13 = getelementptr inbounds { i64* }, { i64* }* %12, i64 0, i32 0
+  %14 = load i64*, i64** %13, align 8
+  %15 = load i64, i64* %14, align 4
+  call void @llvm.lifetime.end.p0i8(i64 0, i8* nonnull %4)
+  %16 = srem i64 %15, %0
+  store i8* %3, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i64 %16
+}
+
+define i64 @"fn8:choose"(%0* %0) local_unnamed_addr {
+  %2 = alloca {}, align 8
+  %.reg2mem = alloca i64, align 8
+  %.reg2mem24 = alloca i64, align 8
+  %.reg2mem26 = alloca i64, align 8
+  %.reg2mem29 = alloca i64, align 8
+  %.reg2mem32 = alloca %0*, align 8
+  %.reg2mem35 = alloca %0*, align 8
+  %.reg2mem38 = alloca i64, align 8
+  %.reg2mem40 = alloca i8*, align 8
+  %.reg2mem42 = alloca i64, align 8
+  %3 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %3, i8** %.reg2mem40, align 8
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %4 = getelementptr inbounds %0, %0* %0, i64 0, i32 0
+  %5 = load i64, i64* %4, align 4
+  %6 = icmp eq i64 %5, 2
+  br i1 %6, label %7, label %.preheader
+
+.preheader:                                       ; preds = %1
+  br label %38
+
+7:                                                ; preds = %1
+  %8 = getelementptr inbounds %0, %0* %0, i64 0, i32 1
+  %9 = load i64, i64* %8, align 4
+  store i64 %9, i64* %.reg2mem38, align 4
+  %10 = getelementptr inbounds %0, %0* %0, i64 0, i32 2
+  %11 = load %0*, %0** %10, align 8
+  store %0* %11, %0** %.reg2mem35, align 8
+  %12 = getelementptr inbounds %0, %0* %0, i64 0, i32 3
+  %13 = load %0*, %0** %12, align 8
+  store %0* %13, %0** %.reg2mem32, align 8
+  %.reload37 = load %0*, %0** %.reg2mem35, align 8
+  %14 = call i64 @"fn5:treeCount"(%0* %.reload37)
+  store i64 %14, i64* %.reg2mem29, align 4
+  %.reload34 = load %0*, %0** %.reg2mem32, align 8
+  %15 = call i64 @"fn5:treeCount"(%0* %.reload34)
+  %.reload31 = load i64, i64* %.reg2mem29, align 4
+  %16 = add i64 %.reload31, 1
+  %17 = add i64 %16, %15
+  %18 = bitcast {}* %2 to i8*
+  call void @llvm.lifetime.start.p0i8(i64 0, i8* nonnull %18)
+  %19 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  call void @llvm.lifetime.start.p0i8(i64 0, i8* nonnull %18) #2
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %20 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %21 = getelementptr inbounds { i64* }, { i64* }* %20, i64 0, i32 0
+  %22 = load i64*, i64** %21, align 8
+  %23 = load i64, i64* %22, align 4
+  %24 = mul i64 %23, 4241
+  %25 = add i64 %24, 22
+  %26 = srem i64 %25, 9949
+  store i64 %26, i64* %22, align 4
+  %27 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %28 = getelementptr inbounds { i64* }, { i64* }* %27, i64 0, i32 0
+  %29 = load i64*, i64** %28, align 8
+  %30 = load i64, i64* %29, align 4
+  call void @llvm.lifetime.end.p0i8(i64 0, i8* nonnull %18) #2
+  %31 = srem i64 %30, %17
+  store i64 %31, i64* %.reg2mem26, align 4
+  store i8* %19, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  call void @llvm.lifetime.end.p0i8(i64 0, i8* nonnull %18)
+  %.reload28 = load i64, i64* %.reg2mem26, align 4
+  %32 = icmp eq i64 %.reload28, 0
+  br i1 %32, label %._crit_edge, label %33
+
+._crit_edge:                                      ; preds = %7
+  %.reload39 = load i64, i64* %.reg2mem38, align 4
+  store i64 %.reload39, i64* %.reg2mem42, align 4
+  br label %45
+
+33:                                               ; preds = %7
+  %.reload30 = load i64, i64* %.reg2mem29, align 4
+  %.not = icmp sgt i64 %.reload28, %.reload30
+  br i1 %.not, label %36, label %34
+
+34:                                               ; preds = %33
+  %.reload36 = load %0*, %0** %.reg2mem35, align 8
+  %35 = call i64 @"fn8:choose"(%0* %.reload36)
+  store i64 %35, i64* %.reg2mem24, align 4
+  store i64 %35, i64* %.reg2mem42, align 4
+  br label %45
+
+36:                                               ; preds = %33
+  %.reload33 = load %0*, %0** %.reg2mem32, align 8
+  %37 = call i64 @"fn8:choose"(%0* %.reload33)
+  store i64 %37, i64* %.reg2mem, align 4
+  store i64 %37, i64* %.reg2mem42, align 4
+  br label %45
+
+38:                                               ; preds = %.preheader, %38
+  %39 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %39, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %40 = bitcast i8* %39 to { i8*, i64 }*
+  %41 = bitcast i8* %39 to i8**
+  store i8* getelementptr inbounds ([71 x i8], [71 x i8]* @2, i64 0, i64 0), i8** %41, align 8
+  %42 = getelementptr inbounds i8, i8* %39, i64 8
+  %43 = bitcast i8* %42 to i64*
+  store i64 71, i64* %43, align 4
+  %44 = call i1 @lla_exit_with_error({ i8*, i64 }* %40, i64 1)
+  br label %38
+
+45:                                               ; preds = %._crit_edge, %36, %34
+  %.reload43 = load i64, i64* %.reg2mem42, align 4
+  %.reload41 = load i8*, i8** %.reg2mem40, align 8
+  store i8* %.reload41, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i64 %.reload43
+}
+
+; Function Attrs: argmemonly nofree nosync nounwind willreturn
+declare void @llvm.lifetime.start.p0i8(i64 immarg, i8* nocapture) #1
+
+; Function Attrs: argmemonly nofree nosync nounwind willreturn
+declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #1
+
+attributes #0 = { mustprogress nofree norecurse nosync nounwind willreturn }
+attributes #1 = { argmemonly nofree nosync nounwind willreturn }
+attributes #2 = { nounwind }
+
+!0 = distinct !{!0, !1}
+!1 = !{!"llvm.loop.peeled.count", i32 1}

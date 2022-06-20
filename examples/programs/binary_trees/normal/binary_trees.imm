@@ -1,0 +1,982 @@
+; ModuleID = 'llama'
+source_filename = "llama"
+
+%"tree:1" = type { i64, i64, %"tree:1"*, %"tree:1"* }
+%"tree:1:Nil" = type { i64 }
+%"tree:1:Node" = type { i64, i64, %"tree:1"*, %"tree:1"* }
+
+@display_array = global [2 x i8*] zeroinitializer
+@str = private unnamed_addr constant [33 x i8] c"Runtime Error: Division by zero\0A\00", align 1
+@str.1 = private unnamed_addr constant [85 x i8] c"Runtime Error: Invalid constructor of type tree encountered in comparison operation\0A\00", align 1
+@str.2 = private unnamed_addr constant [71 x i8] c"Runtime Error: Given expression could not be matched with some clause\0A\00", align 1
+@str.3 = private unnamed_addr constant [2 x i8] c"(\00", align 1
+@str.4 = private unnamed_addr constant [2 x i8] c"|\00", align 1
+@str.5 = private unnamed_addr constant [2 x i8] c")\00", align 1
+@str.6 = private unnamed_addr constant [15 x i8] c"Initial tree: \00", align 1
+@str.7 = private unnamed_addr constant [2 x i8] c"\0A\00", align 1
+@str.8 = private unnamed_addr constant [10 x i8] c"Deleting \00", align 1
+@str.9 = private unnamed_addr constant [3 x i8] c": \00", align 1
+
+declare i1 @lla_print_int(i64)
+
+declare i1 @lla_print_bool(i1)
+
+declare i1 @lla_print_char(i8)
+
+declare i1 @lla_print_float(float)
+
+declare i1 @lla_print_string({ i8*, i64 }*)
+
+declare i64 @lla_read_int(i1)
+
+declare i1 @lla_read_bool(i1)
+
+declare i8 @lla_read_char(i1)
+
+declare float @lla_read_float(i1)
+
+declare i1 @lla_read_string({ i8*, i64 }*)
+
+declare i64 @lla_abs(i64)
+
+declare float @lla_fabs(float)
+
+declare float @lla_sqrt(float)
+
+declare float @lla_sin(float)
+
+declare float @lla_cos(float)
+
+declare float @lla_tan(float)
+
+declare float @lla_atan(float)
+
+declare float @lla_exp(float)
+
+declare float @lla_ln(float)
+
+declare float @lla_pi(i1)
+
+declare i1 @lla_incr(i64*)
+
+declare i1 @lla_decr(i64*)
+
+declare float @lla_float_of_int(i64)
+
+declare i64 @lla_int_of_float(float)
+
+declare i64 @lla_round(float)
+
+declare i64 @lla_int_of_char(i8)
+
+declare i8 @lla_char_of_int(i64)
+
+declare i64 @lla_strlen({ i8*, i64 }*)
+
+declare i64 @lla_strcmp({ i8*, i64 }*, { i8*, i64 }*)
+
+declare i1 @lla_strcpy({ i8*, i64 }*, { i8*, i64 }*)
+
+declare i1 @lla_strcat({ i8*, i64 }*, { i8*, i64 }*)
+
+declare float @lla_pow(float, float)
+
+declare i1 @lla_exit_with_error({ i8*, i64 }*, i64)
+
+declare i8* @GC_init()
+
+declare i8* @GC_malloc(i64)
+
+declare void @GC_register_finalizer(i8*, void (i8*, i8*)*, i8*, void (i8*, i8*)**, i8**)
+
+define void @_free_array_of_malloc(i8* %0, i8* %1) {
+entry:
+  %array_struct_ptr = bitcast i8* %0 to { i8*, i64 }*
+  %malloc_array_ptr_gep = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %array_struct_ptr, i32 0, i32 0
+  %malloc_array_ptr = load i8*, i8** %malloc_array_ptr_gep, align 8
+  tail call void @free(i8* %malloc_array_ptr)
+  ret void
+}
+
+declare void @free(i8*)
+
+define void @_runtime_error(i8* %0, i64 %1) {
+entry:
+  %GC_malloc_call = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %array_struct_ptr = bitcast i8* %GC_malloc_call to { i8*, i64 }*
+  %temp_struct_store_ptr = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %array_struct_ptr, i32 0, i32 0
+  store i8* %0, i8** %temp_struct_store_ptr, align 8
+  %temp_struct_store_ptr1 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %array_struct_ptr, i32 0, i32 1
+  store i64 %1, i64* %temp_struct_store_ptr1, align 4
+  %lla_exit_with_error_call = call i1 @lla_exit_with_error({ i8*, i64 }* %array_struct_ptr, i64 1)
+  ret void
+}
+
+define i64 @_binary_int_division(i64 %0, i64 %1) {
+entry:
+  %denom_zero_comp = icmp eq i64 0, %1
+  br i1 %denom_zero_comp, label %runtime_error, label %body
+
+runtime_error:                                    ; preds = %runtime_error, %entry
+  call void @_runtime_error(i8* getelementptr inbounds ([33 x i8], [33 x i8]* @str, i32 0, i32 0), i64 33)
+  br label %runtime_error
+
+body:                                             ; preds = %entry
+  %division = sdiv i64 %0, %1
+  ret i64 %division
+}
+
+define float @_binary_float_division(float %0, float %1) {
+entry:
+  %denom_zero_comp = fcmp oeq float 0.000000e+00, %1
+  br i1 %denom_zero_comp, label %runtime_error, label %body
+
+runtime_error:                                    ; preds = %runtime_error, %entry
+  call void @_runtime_error(i8* getelementptr inbounds ([33 x i8], [33 x i8]* @str, i32 0, i32 0), i64 33)
+  br label %runtime_error
+
+body:                                             ; preds = %entry
+  %division = fdiv float %0, %1
+  ret float %division
+}
+
+define i64 @main() {
+entry:
+  %0 = call i8* @GC_init()
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %"main:frame_ptr" = alloca { i64* }, align 8
+  %casted_elem_frame_ptr = bitcast { i64* }* %"main:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %"cv1:main" = alloca i1, align 1
+  %"mv2:t" = alloca %"tree:1"**, align 8
+  %"for1:i" = alloca i64, align 8
+  %"for2:i" = alloca i64, align 8
+  %"cv5:n" = alloca i64, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  %display_array_ptr_load1 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %casted_frame_ptr = bitcast i8* %display_array_ptr_load1 to { i64* }*
+  %"mv1:seed:temp_gep" = getelementptr inbounds { i64* }, { i64* }* %casted_frame_ptr, i32 0, i32 0
+  %GC_malloc_call = call i8* @GC_malloc(i64 8)
+  %"mv1:seed_alloca_ptr" = bitcast i8* %GC_malloc_call to i64*
+  store i64* %"mv1:seed_alloca_ptr", i64** %"mv1:seed:temp_gep", align 8
+  %display_array_ptr_load2 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %casted_frame_ptr3 = bitcast i8* %display_array_ptr_load2 to { i64* }*
+  %"mv1:seed:temp_gep4" = getelementptr inbounds { i64* }, { i64* }* %casted_frame_ptr3, i32 0, i32 0
+  %temp_id_load = load i64*, i64** %"mv1:seed:temp_gep4", align 8
+  store i64 65, i64* %temp_id_load, align 4
+  %GC_malloc_call5 = call i8* @GC_malloc(i64 8)
+  %"mv2:t_alloca_ptr" = bitcast i8* %GC_malloc_call5 to %"tree:1"**
+  store %"tree:1"** %"mv2:t_alloca_ptr", %"tree:1"*** %"mv2:t", align 8
+  %temp_id_load6 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %GC_malloc_call7 = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Nil" = bitcast i8* %GC_malloc_call7 to %"tree:1"*
+  %userdef_struct_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Nil", i32 0, i32 0
+  store i64 1, i64* %userdef_struct_tag_ptr, align 4
+  store %"tree:1"* %"userdef_struct_ptr:Nil", %"tree:1"** %temp_id_load6, align 8
+  br label %for_check
+
+for_check:                                        ; preds = %for_body, %body
+  %loop_var = phi i64 [ 1, %body ], [ %next_loop_var, %for_body ]
+  store i64 %loop_var, i64* %"for1:i", align 4
+  %cond = icmp sle i64 %loop_var, 10
+  br i1 %cond, label %for_body, label %for_after
+
+for_body:                                         ; preds = %for_check
+  %temp_id_load8 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %temp_id_load9 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %unary_ref = load %"tree:1"*, %"tree:1"** %temp_id_load9, align 8
+  %temp_call = call i64 @"fn7:random"(i64 100)
+  %temp_call10 = call %"tree:1"* @"fn1:treeInsert"(%"tree:1"* %unary_ref, i64 %temp_call)
+  store %"tree:1"* %temp_call10, %"tree:1"** %temp_id_load8, align 8
+  %next_loop_var = add i64 %loop_var, 1
+  br label %for_check
+
+for_after:                                        ; preds = %for_check
+  %GC_malloc_call11 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call11, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr = bitcast i8* %GC_malloc_call11 to { i8*, i64 }*
+  %temp_struct_store_ptr = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr, i32 0, i32 0
+  store i8* getelementptr inbounds ([15 x i8], [15 x i8]* @str.6, i32 0, i32 0), i8** %temp_struct_store_ptr, align 8
+  %temp_struct_store_ptr12 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr, i32 0, i32 1
+  store i64 15, i64* %temp_struct_store_ptr12, align 4
+  %temp_call13 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr)
+  %temp_id_load14 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %unary_ref15 = load %"tree:1"*, %"tree:1"** %temp_id_load14, align 8
+  %temp_call16 = call i1 @"fn4:treePrint"(%"tree:1"* %unary_ref15)
+  %GC_malloc_call17 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call17, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr18 = bitcast i8* %GC_malloc_call17 to { i8*, i64 }*
+  %temp_struct_store_ptr19 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr18, i32 0, i32 0
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.7, i32 0, i32 0), i8** %temp_struct_store_ptr19, align 8
+  %temp_struct_store_ptr20 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr18, i32 0, i32 1
+  store i64 2, i64* %temp_struct_store_ptr20, align 4
+  %temp_call21 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr18)
+  %temp_id_load25 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %unary_ref26 = load %"tree:1"*, %"tree:1"** %temp_id_load25, align 8
+  %temp_call27 = call i64 @"fn5:treeCount"(%"tree:1"* %unary_ref26)
+  br label %for_check22
+
+for_check22:                                      ; preds = %for_body23, %for_after
+  %loop_var28 = phi i64 [ 1, %for_after ], [ %next_loop_var58, %for_body23 ]
+  store i64 %loop_var28, i64* %"for2:i", align 4
+  %cond29 = icmp sle i64 %loop_var28, %temp_call27
+  br i1 %cond29, label %for_body23, label %for_after24
+
+for_body23:                                       ; preds = %for_check22
+  %temp_id_load30 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %unary_ref31 = load %"tree:1"*, %"tree:1"** %temp_id_load30, align 8
+  %temp_call32 = call i64 @"fn8:choose"(%"tree:1"* %unary_ref31)
+  store i64 %temp_call32, i64* %"cv5:n", align 4
+  %GC_malloc_call33 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call33, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr34 = bitcast i8* %GC_malloc_call33 to { i8*, i64 }*
+  %temp_struct_store_ptr35 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr34, i32 0, i32 0
+  store i8* getelementptr inbounds ([10 x i8], [10 x i8]* @str.8, i32 0, i32 0), i8** %temp_struct_store_ptr35, align 8
+  %temp_struct_store_ptr36 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr34, i32 0, i32 1
+  store i64 10, i64* %temp_struct_store_ptr36, align 4
+  %temp_call37 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr34)
+  %temp_id_load38 = load i64, i64* %"cv5:n", align 4
+  %temp_call39 = call i1 @lla_print_int(i64 %temp_id_load38)
+  %GC_malloc_call40 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call40, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr41 = bitcast i8* %GC_malloc_call40 to { i8*, i64 }*
+  %temp_struct_store_ptr42 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr41, i32 0, i32 0
+  store i8* getelementptr inbounds ([3 x i8], [3 x i8]* @str.9, i32 0, i32 0), i8** %temp_struct_store_ptr42, align 8
+  %temp_struct_store_ptr43 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr41, i32 0, i32 1
+  store i64 3, i64* %temp_struct_store_ptr43, align 4
+  %temp_call44 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr41)
+  %temp_id_load45 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %temp_id_load46 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %unary_ref47 = load %"tree:1"*, %"tree:1"** %temp_id_load46, align 8
+  %temp_id_load48 = load i64, i64* %"cv5:n", align 4
+  %temp_call49 = call %"tree:1"* @"fn3:treeDelete"(%"tree:1"* %unary_ref47, i64 %temp_id_load48)
+  store %"tree:1"* %temp_call49, %"tree:1"** %temp_id_load45, align 8
+  %temp_id_load50 = load %"tree:1"**, %"tree:1"*** %"mv2:t", align 8
+  %unary_ref51 = load %"tree:1"*, %"tree:1"** %temp_id_load50, align 8
+  %temp_call52 = call i1 @"fn4:treePrint"(%"tree:1"* %unary_ref51)
+  %GC_malloc_call53 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call53, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr54 = bitcast i8* %GC_malloc_call53 to { i8*, i64 }*
+  %temp_struct_store_ptr55 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr54, i32 0, i32 0
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.7, i32 0, i32 0), i8** %temp_struct_store_ptr55, align 8
+  %temp_struct_store_ptr56 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr54, i32 0, i32 1
+  store i64 2, i64* %temp_struct_store_ptr56, align 4
+  %temp_call57 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr54)
+  %next_loop_var58 = add i64 %loop_var28, 1
+  br label %for_check22
+
+for_after24:                                      ; preds = %for_check22
+  store i1 false, i1* %"cv1:main", align 1
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  ret i64 0
+}
+
+define i1 @"_tree:1_equality"(%"tree:1"* %0, %"tree:1"* %1) {
+entry:
+  %tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %0, i32 0, i32 0
+  %tag_load = load i64, i64* %tag_ptr, align 4
+  %tag_ptr1 = getelementptr inbounds %"tree:1", %"tree:1"* %1, i32 0, i32 0
+  %tag_load2 = load i64, i64* %tag_ptr1, align 4
+  %same_tag_comp = icmp eq i64 %tag_load, %tag_load2
+  br i1 %same_tag_comp, label %body, label %exit
+
+body:                                             ; preds = %entry
+  switch i64 %tag_load, label %error [
+    i64 1, label %"case_tree:1:Nil"
+    i64 2, label %"case_tree:1:Node"
+  ]
+
+"case_tree:1:Nil":                                ; preds = %body
+  %s1_constr_type_cast = bitcast %"tree:1"* %0 to %"tree:1:Nil"*
+  %s2_constr_type_cast = bitcast %"tree:1"* %1 to %"tree:1:Nil"*
+  br label %exit
+
+"case_tree:1:Node":                               ; preds = %body
+  %s1_constr_type_cast3 = bitcast %"tree:1"* %0 to %"tree:1:Node"*
+  %s2_constr_type_cast4 = bitcast %"tree:1"* %1 to %"tree:1:Node"*
+  %temp_constr_param_load_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %s2_constr_type_cast4, i32 0, i32 1
+  %temp_constr_param_load = load i64, i64* %temp_constr_param_load_ptr, align 4
+  %temp_constr_param_load_ptr5 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %s1_constr_type_cast3, i32 0, i32 1
+  %temp_constr_param_load6 = load i64, i64* %temp_constr_param_load_ptr5, align 4
+  %temp_constr_param_load_ptr7 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %s2_constr_type_cast4, i32 0, i32 2
+  %temp_constr_param_load8 = load %"tree:1"*, %"tree:1"** %temp_constr_param_load_ptr7, align 8
+  %temp_constr_param_load_ptr9 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %s1_constr_type_cast3, i32 0, i32 2
+  %temp_constr_param_load10 = load %"tree:1"*, %"tree:1"** %temp_constr_param_load_ptr9, align 8
+  %temp_constr_param_load_ptr11 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %s2_constr_type_cast4, i32 0, i32 3
+  %temp_constr_param_load12 = load %"tree:1"*, %"tree:1"** %temp_constr_param_load_ptr11, align 8
+  %temp_constr_param_load_ptr13 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %s1_constr_type_cast3, i32 0, i32 3
+  %temp_constr_param_load14 = load %"tree:1"*, %"tree:1"** %temp_constr_param_load_ptr13, align 8
+  %int_equality_check = icmp eq i64 %temp_constr_param_load6, %temp_constr_param_load
+  %temp_constr_param_and = and i1 true, %int_equality_check
+  %constr_eq_call = call i1 @"_tree:1_equality"(%"tree:1"* %temp_constr_param_load10, %"tree:1"* %temp_constr_param_load8)
+  %temp_constr_param_and15 = and i1 %temp_constr_param_and, %constr_eq_call
+  %constr_eq_call16 = call i1 @"_tree:1_equality"(%"tree:1"* %temp_constr_param_load14, %"tree:1"* %temp_constr_param_load12)
+  %temp_constr_param_and17 = and i1 %temp_constr_param_and15, %constr_eq_call16
+  br label %exit
+
+error:                                            ; preds = %error, %body
+  call void @_runtime_error(i8* getelementptr inbounds ([85 x i8], [85 x i8]* @str.1, i32 0, i32 0), i64 85)
+  br label %error
+
+exit:                                             ; preds = %"case_tree:1:Node", %"case_tree:1:Nil", %entry
+  %temp_phi = phi i1 [ false, %entry ], [ true, %"case_tree:1:Nil" ], [ %temp_constr_param_and17, %"case_tree:1:Node" ]
+  ret i1 %temp_phi
+}
+
+define %"tree:1"* @"fn1:treeInsert"(%"tree:1"* %0, i64 %1) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn1:treeInsert:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn1:treeInsert:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm1:t" = alloca %"tree:1"*, align 8
+  %"pm2:n" = alloca i64, align 8
+  %"pat1:m" = alloca i64, align 8
+  %"pat2:t1" = alloca %"tree:1"*, align 8
+  %"pat3:t2" = alloca %"tree:1"*, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store %"tree:1"* %0, %"tree:1"** %"pm1:t", align 8
+  store i64 %1, i64* %"pm2:n", align 4
+  %temp_id_load = load %"tree:1"*, %"tree:1"** %"pm1:t", align 8
+  br label %match_check_1
+
+match_check_1:                                    ; preds = %body
+  %match_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load = load i64, i64* %match_tag_ptr, align 4
+  %tag_comp = icmp eq i64 1, %match_tag_load
+  br i1 %tag_comp, label %match_param_check_1, label %match_check_2
+
+match_param_check_1:                              ; preds = %match_check_1
+  %matched_type_to_constr_cast = bitcast %"tree:1"* %temp_id_load to %"tree:1:Nil"*
+  br i1 true, label %match_success_1, label %match_check_2
+
+match_success_1:                                  ; preds = %match_param_check_1
+  %GC_malloc_call = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Node" = bitcast i8* %GC_malloc_call to %"tree:1"*
+  %userdef_struct_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Node", i32 0, i32 0
+  store i64 2, i64* %userdef_struct_tag_ptr, align 4
+  %constr_struct_ptr = bitcast %"tree:1"* %"userdef_struct_ptr:Node" to %"tree:1:Node"*
+  %temp_id_load1 = load i64, i64* %"pm2:n", align 4
+  %GC_malloc_call2 = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Nil" = bitcast i8* %GC_malloc_call2 to %"tree:1"*
+  %userdef_struct_tag_ptr3 = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Nil", i32 0, i32 0
+  store i64 1, i64* %userdef_struct_tag_ptr3, align 4
+  %GC_malloc_call4 = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Nil5" = bitcast i8* %GC_malloc_call4 to %"tree:1"*
+  %userdef_struct_tag_ptr6 = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Nil5", i32 0, i32 0
+  store i64 1, i64* %userdef_struct_tag_ptr6, align 4
+  %temp_constr_struct_store_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 1
+  store i64 %temp_id_load1, i64* %temp_constr_struct_store_ptr, align 4
+  %temp_constr_struct_store_ptr7 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 2
+  store %"tree:1"* %"userdef_struct_ptr:Nil", %"tree:1"** %temp_constr_struct_store_ptr7, align 8
+  %temp_constr_struct_store_ptr8 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 3
+  store %"tree:1"* %"userdef_struct_ptr:Nil5", %"tree:1"** %temp_constr_struct_store_ptr8, align 8
+  br label %match_finished
+
+match_check_2:                                    ; preds = %match_param_check_1, %match_check_1
+  %match_tag_ptr9 = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load10 = load i64, i64* %match_tag_ptr9, align 4
+  %tag_comp11 = icmp eq i64 2, %match_tag_load10
+  br i1 %tag_comp11, label %match_param_check_2, label %match_failed
+
+match_param_check_2:                              ; preds = %match_check_2
+  %matched_type_to_constr_cast12 = bitcast %"tree:1"* %temp_id_load to %"tree:1:Node"*
+  %temp_match_constr_param_load_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast12, i32 0, i32 1
+  %temp_match_constr_param_load = load i64, i64* %temp_match_constr_param_load_ptr, align 4
+  %temp_match_constr_param_load_ptr13 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast12, i32 0, i32 2
+  %temp_match_constr_param_load14 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr13, align 8
+  %temp_match_constr_param_load_ptr15 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast12, i32 0, i32 3
+  %temp_match_constr_param_load16 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr15, align 8
+  store i64 %temp_match_constr_param_load, i64* %"pat1:m", align 4
+  store %"tree:1"* %temp_match_constr_param_load14, %"tree:1"** %"pat2:t1", align 8
+  store %"tree:1"* %temp_match_constr_param_load16, %"tree:1"** %"pat3:t2", align 8
+  br i1 true, label %match_success_2, label %match_failed
+
+match_success_2:                                  ; preds = %match_param_check_2
+  %temp_id_load17 = load i64, i64* %"pm2:n", align 4
+  %temp_id_load18 = load i64, i64* %"pat1:m", align 4
+  %binary_lt = icmp slt i64 %temp_id_load17, %temp_id_load18
+  br i1 %binary_lt, label %if_then, label %if_else
+
+if_then:                                          ; preds = %match_success_2
+  %GC_malloc_call19 = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Node20" = bitcast i8* %GC_malloc_call19 to %"tree:1"*
+  %userdef_struct_tag_ptr21 = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Node20", i32 0, i32 0
+  store i64 2, i64* %userdef_struct_tag_ptr21, align 4
+  %constr_struct_ptr22 = bitcast %"tree:1"* %"userdef_struct_ptr:Node20" to %"tree:1:Node"*
+  %temp_id_load23 = load i64, i64* %"pat1:m", align 4
+  %temp_id_load24 = load %"tree:1"*, %"tree:1"** %"pat2:t1", align 8
+  %temp_id_load25 = load i64, i64* %"pm2:n", align 4
+  %temp_call = call %"tree:1"* @"fn1:treeInsert"(%"tree:1"* %temp_id_load24, i64 %temp_id_load25)
+  %temp_id_load26 = load %"tree:1"*, %"tree:1"** %"pat3:t2", align 8
+  %temp_constr_struct_store_ptr27 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr22, i32 0, i32 1
+  store i64 %temp_id_load23, i64* %temp_constr_struct_store_ptr27, align 4
+  %temp_constr_struct_store_ptr28 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr22, i32 0, i32 2
+  store %"tree:1"* %temp_call, %"tree:1"** %temp_constr_struct_store_ptr28, align 8
+  %temp_constr_struct_store_ptr29 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr22, i32 0, i32 3
+  store %"tree:1"* %temp_id_load26, %"tree:1"** %temp_constr_struct_store_ptr29, align 8
+  br label %if_merge
+
+if_else:                                          ; preds = %match_success_2
+  %temp_id_load33 = load i64, i64* %"pm2:n", align 4
+  %temp_id_load34 = load i64, i64* %"pat1:m", align 4
+  %binary_gt = icmp sgt i64 %temp_id_load33, %temp_id_load34
+  br i1 %binary_gt, label %if_then30, label %if_else31
+
+if_then30:                                        ; preds = %if_else
+  %GC_malloc_call35 = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Node36" = bitcast i8* %GC_malloc_call35 to %"tree:1"*
+  %userdef_struct_tag_ptr37 = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Node36", i32 0, i32 0
+  store i64 2, i64* %userdef_struct_tag_ptr37, align 4
+  %constr_struct_ptr38 = bitcast %"tree:1"* %"userdef_struct_ptr:Node36" to %"tree:1:Node"*
+  %temp_id_load39 = load i64, i64* %"pat1:m", align 4
+  %temp_id_load40 = load %"tree:1"*, %"tree:1"** %"pat2:t1", align 8
+  %temp_id_load41 = load %"tree:1"*, %"tree:1"** %"pat3:t2", align 8
+  %temp_id_load42 = load i64, i64* %"pm2:n", align 4
+  %temp_call43 = call %"tree:1"* @"fn1:treeInsert"(%"tree:1"* %temp_id_load41, i64 %temp_id_load42)
+  %temp_constr_struct_store_ptr44 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr38, i32 0, i32 1
+  store i64 %temp_id_load39, i64* %temp_constr_struct_store_ptr44, align 4
+  %temp_constr_struct_store_ptr45 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr38, i32 0, i32 2
+  store %"tree:1"* %temp_id_load40, %"tree:1"** %temp_constr_struct_store_ptr45, align 8
+  %temp_constr_struct_store_ptr46 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr38, i32 0, i32 3
+  store %"tree:1"* %temp_call43, %"tree:1"** %temp_constr_struct_store_ptr46, align 8
+  br label %if_merge32
+
+if_else31:                                        ; preds = %if_else
+  %temp_id_load47 = load %"tree:1"*, %"tree:1"** %"pm1:t", align 8
+  br label %if_merge32
+
+if_merge32:                                       ; preds = %if_else31, %if_then30
+  %temp_phi = phi %"tree:1"* [ %"userdef_struct_ptr:Node36", %if_then30 ], [ %temp_id_load47, %if_else31 ]
+  br label %if_merge
+
+if_merge:                                         ; preds = %if_merge32, %if_then
+  %temp_phi48 = phi %"tree:1"* [ %"userdef_struct_ptr:Node20", %if_then ], [ %temp_phi, %if_merge32 ]
+  br label %match_finished
+
+match_failed:                                     ; preds = %match_failed, %match_param_check_2, %match_check_2
+  call void @_runtime_error(i8* getelementptr inbounds ([71 x i8], [71 x i8]* @str.2, i32 0, i32 0), i64 71)
+  br label %match_failed
+
+match_finished:                                   ; preds = %if_merge, %match_success_1
+  %temp_match_phi = phi %"tree:1"* [ %"userdef_struct_ptr:Node", %match_success_1 ], [ %temp_phi48, %if_merge ]
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret %"tree:1"* %temp_match_phi
+}
+
+define %"tree:1"* @"fn2:treeMerge"(%"tree:1"* %0, %"tree:1"* %1) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn2:treeMerge:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn2:treeMerge:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm3:t1" = alloca %"tree:1"*, align 8
+  %"pm4:t2" = alloca %"tree:1"*, align 8
+  %"pat4:n" = alloca i64, align 8
+  %"pat5:t11" = alloca %"tree:1"*, align 8
+  %"pat6:t12" = alloca %"tree:1"*, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store %"tree:1"* %0, %"tree:1"** %"pm3:t1", align 8
+  store %"tree:1"* %1, %"tree:1"** %"pm4:t2", align 8
+  %temp_id_load = load %"tree:1"*, %"tree:1"** %"pm3:t1", align 8
+  br label %match_check_1
+
+match_check_1:                                    ; preds = %body
+  %match_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load = load i64, i64* %match_tag_ptr, align 4
+  %tag_comp = icmp eq i64 1, %match_tag_load
+  br i1 %tag_comp, label %match_param_check_1, label %match_check_2
+
+match_param_check_1:                              ; preds = %match_check_1
+  %matched_type_to_constr_cast = bitcast %"tree:1"* %temp_id_load to %"tree:1:Nil"*
+  br i1 true, label %match_success_1, label %match_check_2
+
+match_success_1:                                  ; preds = %match_param_check_1
+  %temp_id_load1 = load %"tree:1"*, %"tree:1"** %"pm4:t2", align 8
+  br label %match_finished
+
+match_check_2:                                    ; preds = %match_param_check_1, %match_check_1
+  %match_tag_ptr2 = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load3 = load i64, i64* %match_tag_ptr2, align 4
+  %tag_comp4 = icmp eq i64 2, %match_tag_load3
+  br i1 %tag_comp4, label %match_param_check_2, label %match_failed
+
+match_param_check_2:                              ; preds = %match_check_2
+  %matched_type_to_constr_cast5 = bitcast %"tree:1"* %temp_id_load to %"tree:1:Node"*
+  %temp_match_constr_param_load_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast5, i32 0, i32 1
+  %temp_match_constr_param_load = load i64, i64* %temp_match_constr_param_load_ptr, align 4
+  %temp_match_constr_param_load_ptr6 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast5, i32 0, i32 2
+  %temp_match_constr_param_load7 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr6, align 8
+  %temp_match_constr_param_load_ptr8 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast5, i32 0, i32 3
+  %temp_match_constr_param_load9 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr8, align 8
+  store i64 %temp_match_constr_param_load, i64* %"pat4:n", align 4
+  store %"tree:1"* %temp_match_constr_param_load7, %"tree:1"** %"pat5:t11", align 8
+  store %"tree:1"* %temp_match_constr_param_load9, %"tree:1"** %"pat6:t12", align 8
+  br i1 true, label %match_success_2, label %match_failed
+
+match_success_2:                                  ; preds = %match_param_check_2
+  %GC_malloc_call = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Node" = bitcast i8* %GC_malloc_call to %"tree:1"*
+  %userdef_struct_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Node", i32 0, i32 0
+  store i64 2, i64* %userdef_struct_tag_ptr, align 4
+  %constr_struct_ptr = bitcast %"tree:1"* %"userdef_struct_ptr:Node" to %"tree:1:Node"*
+  %temp_id_load10 = load i64, i64* %"pat4:n", align 4
+  %temp_id_load11 = load %"tree:1"*, %"tree:1"** %"pat5:t11", align 8
+  %temp_id_load12 = load %"tree:1"*, %"tree:1"** %"pat6:t12", align 8
+  %temp_id_load13 = load %"tree:1"*, %"tree:1"** %"pm4:t2", align 8
+  %temp_call = call %"tree:1"* @"fn2:treeMerge"(%"tree:1"* %temp_id_load12, %"tree:1"* %temp_id_load13)
+  %temp_constr_struct_store_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 1
+  store i64 %temp_id_load10, i64* %temp_constr_struct_store_ptr, align 4
+  %temp_constr_struct_store_ptr14 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 2
+  store %"tree:1"* %temp_id_load11, %"tree:1"** %temp_constr_struct_store_ptr14, align 8
+  %temp_constr_struct_store_ptr15 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 3
+  store %"tree:1"* %temp_call, %"tree:1"** %temp_constr_struct_store_ptr15, align 8
+  br label %match_finished
+
+match_failed:                                     ; preds = %match_failed, %match_param_check_2, %match_check_2
+  call void @_runtime_error(i8* getelementptr inbounds ([71 x i8], [71 x i8]* @str.2, i32 0, i32 0), i64 71)
+  br label %match_failed
+
+match_finished:                                   ; preds = %match_success_2, %match_success_1
+  %temp_match_phi = phi %"tree:1"* [ %temp_id_load1, %match_success_1 ], [ %"userdef_struct_ptr:Node", %match_success_2 ]
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret %"tree:1"* %temp_match_phi
+}
+
+define %"tree:1"* @"fn3:treeDelete"(%"tree:1"* %0, i64 %1) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn3:treeDelete:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn3:treeDelete:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm5:t" = alloca %"tree:1"*, align 8
+  %"pm6:n" = alloca i64, align 8
+  %"pat7:m" = alloca i64, align 8
+  %"pat8:t1" = alloca %"tree:1"*, align 8
+  %"pat9:t2" = alloca %"tree:1"*, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store %"tree:1"* %0, %"tree:1"** %"pm5:t", align 8
+  store i64 %1, i64* %"pm6:n", align 4
+  %temp_id_load = load %"tree:1"*, %"tree:1"** %"pm5:t", align 8
+  br label %match_check_1
+
+match_check_1:                                    ; preds = %body
+  %match_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load = load i64, i64* %match_tag_ptr, align 4
+  %tag_comp = icmp eq i64 1, %match_tag_load
+  br i1 %tag_comp, label %match_param_check_1, label %match_check_2
+
+match_param_check_1:                              ; preds = %match_check_1
+  %matched_type_to_constr_cast = bitcast %"tree:1"* %temp_id_load to %"tree:1:Nil"*
+  br i1 true, label %match_success_1, label %match_check_2
+
+match_success_1:                                  ; preds = %match_param_check_1
+  %temp_id_load1 = load %"tree:1"*, %"tree:1"** %"pm5:t", align 8
+  br label %match_finished
+
+match_check_2:                                    ; preds = %match_param_check_1, %match_check_1
+  %match_tag_ptr2 = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load3 = load i64, i64* %match_tag_ptr2, align 4
+  %tag_comp4 = icmp eq i64 2, %match_tag_load3
+  br i1 %tag_comp4, label %match_param_check_2, label %match_failed
+
+match_param_check_2:                              ; preds = %match_check_2
+  %matched_type_to_constr_cast5 = bitcast %"tree:1"* %temp_id_load to %"tree:1:Node"*
+  %temp_match_constr_param_load_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast5, i32 0, i32 1
+  %temp_match_constr_param_load = load i64, i64* %temp_match_constr_param_load_ptr, align 4
+  %temp_match_constr_param_load_ptr6 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast5, i32 0, i32 2
+  %temp_match_constr_param_load7 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr6, align 8
+  %temp_match_constr_param_load_ptr8 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast5, i32 0, i32 3
+  %temp_match_constr_param_load9 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr8, align 8
+  store i64 %temp_match_constr_param_load, i64* %"pat7:m", align 4
+  store %"tree:1"* %temp_match_constr_param_load7, %"tree:1"** %"pat8:t1", align 8
+  store %"tree:1"* %temp_match_constr_param_load9, %"tree:1"** %"pat9:t2", align 8
+  br i1 true, label %match_success_2, label %match_failed
+
+match_success_2:                                  ; preds = %match_param_check_2
+  %temp_id_load10 = load i64, i64* %"pm6:n", align 4
+  %temp_id_load11 = load i64, i64* %"pat7:m", align 4
+  %binary_lt = icmp slt i64 %temp_id_load10, %temp_id_load11
+  br i1 %binary_lt, label %if_then, label %if_else
+
+if_then:                                          ; preds = %match_success_2
+  %GC_malloc_call = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Node" = bitcast i8* %GC_malloc_call to %"tree:1"*
+  %userdef_struct_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Node", i32 0, i32 0
+  store i64 2, i64* %userdef_struct_tag_ptr, align 4
+  %constr_struct_ptr = bitcast %"tree:1"* %"userdef_struct_ptr:Node" to %"tree:1:Node"*
+  %temp_id_load12 = load i64, i64* %"pat7:m", align 4
+  %temp_id_load13 = load %"tree:1"*, %"tree:1"** %"pat8:t1", align 8
+  %temp_id_load14 = load i64, i64* %"pm6:n", align 4
+  %temp_call = call %"tree:1"* @"fn3:treeDelete"(%"tree:1"* %temp_id_load13, i64 %temp_id_load14)
+  %temp_id_load15 = load %"tree:1"*, %"tree:1"** %"pat9:t2", align 8
+  %temp_constr_struct_store_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 1
+  store i64 %temp_id_load12, i64* %temp_constr_struct_store_ptr, align 4
+  %temp_constr_struct_store_ptr16 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 2
+  store %"tree:1"* %temp_call, %"tree:1"** %temp_constr_struct_store_ptr16, align 8
+  %temp_constr_struct_store_ptr17 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr, i32 0, i32 3
+  store %"tree:1"* %temp_id_load15, %"tree:1"** %temp_constr_struct_store_ptr17, align 8
+  br label %if_merge
+
+if_else:                                          ; preds = %match_success_2
+  %temp_id_load21 = load i64, i64* %"pm6:n", align 4
+  %temp_id_load22 = load i64, i64* %"pat7:m", align 4
+  %binary_gt = icmp sgt i64 %temp_id_load21, %temp_id_load22
+  br i1 %binary_gt, label %if_then18, label %if_else19
+
+if_then18:                                        ; preds = %if_else
+  %GC_malloc_call23 = call i8* @GC_malloc(i64 32)
+  %"userdef_struct_ptr:Node24" = bitcast i8* %GC_malloc_call23 to %"tree:1"*
+  %userdef_struct_tag_ptr25 = getelementptr inbounds %"tree:1", %"tree:1"* %"userdef_struct_ptr:Node24", i32 0, i32 0
+  store i64 2, i64* %userdef_struct_tag_ptr25, align 4
+  %constr_struct_ptr26 = bitcast %"tree:1"* %"userdef_struct_ptr:Node24" to %"tree:1:Node"*
+  %temp_id_load27 = load i64, i64* %"pat7:m", align 4
+  %temp_id_load28 = load %"tree:1"*, %"tree:1"** %"pat8:t1", align 8
+  %temp_id_load29 = load %"tree:1"*, %"tree:1"** %"pat9:t2", align 8
+  %temp_id_load30 = load i64, i64* %"pm6:n", align 4
+  %temp_call31 = call %"tree:1"* @"fn3:treeDelete"(%"tree:1"* %temp_id_load29, i64 %temp_id_load30)
+  %temp_constr_struct_store_ptr32 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr26, i32 0, i32 1
+  store i64 %temp_id_load27, i64* %temp_constr_struct_store_ptr32, align 4
+  %temp_constr_struct_store_ptr33 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr26, i32 0, i32 2
+  store %"tree:1"* %temp_id_load28, %"tree:1"** %temp_constr_struct_store_ptr33, align 8
+  %temp_constr_struct_store_ptr34 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %constr_struct_ptr26, i32 0, i32 3
+  store %"tree:1"* %temp_call31, %"tree:1"** %temp_constr_struct_store_ptr34, align 8
+  br label %if_merge20
+
+if_else19:                                        ; preds = %if_else
+  %temp_id_load35 = load %"tree:1"*, %"tree:1"** %"pat8:t1", align 8
+  %temp_id_load36 = load %"tree:1"*, %"tree:1"** %"pat9:t2", align 8
+  %temp_call37 = call %"tree:1"* @"fn2:treeMerge"(%"tree:1"* %temp_id_load35, %"tree:1"* %temp_id_load36)
+  br label %if_merge20
+
+if_merge20:                                       ; preds = %if_else19, %if_then18
+  %temp_phi = phi %"tree:1"* [ %"userdef_struct_ptr:Node24", %if_then18 ], [ %temp_call37, %if_else19 ]
+  br label %if_merge
+
+if_merge:                                         ; preds = %if_merge20, %if_then
+  %temp_phi38 = phi %"tree:1"* [ %"userdef_struct_ptr:Node", %if_then ], [ %temp_phi, %if_merge20 ]
+  br label %match_finished
+
+match_failed:                                     ; preds = %match_failed, %match_param_check_2, %match_check_2
+  call void @_runtime_error(i8* getelementptr inbounds ([71 x i8], [71 x i8]* @str.2, i32 0, i32 0), i64 71)
+  br label %match_failed
+
+match_finished:                                   ; preds = %if_merge, %match_success_1
+  %temp_match_phi = phi %"tree:1"* [ %temp_id_load1, %match_success_1 ], [ %temp_phi38, %if_merge ]
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret %"tree:1"* %temp_match_phi
+}
+
+define i1 @"fn4:treePrint"(%"tree:1"* %0) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn4:treePrint:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn4:treePrint:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm7:t" = alloca %"tree:1"*, align 8
+  %"pat10:n" = alloca i64, align 8
+  %"pat11:t1" = alloca %"tree:1"*, align 8
+  %"pat12:t2" = alloca %"tree:1"*, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store %"tree:1"* %0, %"tree:1"** %"pm7:t", align 8
+  %temp_id_load = load %"tree:1"*, %"tree:1"** %"pm7:t", align 8
+  br label %match_check_1
+
+match_check_1:                                    ; preds = %body
+  %match_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load = load i64, i64* %match_tag_ptr, align 4
+  %tag_comp = icmp eq i64 1, %match_tag_load
+  br i1 %tag_comp, label %match_param_check_1, label %match_check_2
+
+match_param_check_1:                              ; preds = %match_check_1
+  %matched_type_to_constr_cast = bitcast %"tree:1"* %temp_id_load to %"tree:1:Nil"*
+  br i1 true, label %match_success_1, label %match_check_2
+
+match_success_1:                                  ; preds = %match_param_check_1
+  br label %match_finished
+
+match_check_2:                                    ; preds = %match_param_check_1, %match_check_1
+  %match_tag_ptr1 = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load2 = load i64, i64* %match_tag_ptr1, align 4
+  %tag_comp3 = icmp eq i64 2, %match_tag_load2
+  br i1 %tag_comp3, label %match_param_check_2, label %match_failed
+
+match_param_check_2:                              ; preds = %match_check_2
+  %matched_type_to_constr_cast4 = bitcast %"tree:1"* %temp_id_load to %"tree:1:Node"*
+  %temp_match_constr_param_load_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast4, i32 0, i32 1
+  %temp_match_constr_param_load = load i64, i64* %temp_match_constr_param_load_ptr, align 4
+  %temp_match_constr_param_load_ptr5 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast4, i32 0, i32 2
+  %temp_match_constr_param_load6 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr5, align 8
+  %temp_match_constr_param_load_ptr7 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast4, i32 0, i32 3
+  %temp_match_constr_param_load8 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr7, align 8
+  store i64 %temp_match_constr_param_load, i64* %"pat10:n", align 4
+  store %"tree:1"* %temp_match_constr_param_load6, %"tree:1"** %"pat11:t1", align 8
+  store %"tree:1"* %temp_match_constr_param_load8, %"tree:1"** %"pat12:t2", align 8
+  br i1 true, label %match_success_2, label %match_failed
+
+match_success_2:                                  ; preds = %match_param_check_2
+  %temp_id_load9 = load i64, i64* %"pat10:n", align 4
+  %temp_call = call i1 @lla_print_int(i64 %temp_id_load9)
+  %GC_malloc_call = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr = bitcast i8* %GC_malloc_call to { i8*, i64 }*
+  %temp_struct_store_ptr = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr, i32 0, i32 0
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.3, i32 0, i32 0), i8** %temp_struct_store_ptr, align 8
+  %temp_struct_store_ptr10 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr, i32 0, i32 1
+  store i64 2, i64* %temp_struct_store_ptr10, align 4
+  %temp_call11 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr)
+  %temp_id_load12 = load %"tree:1"*, %"tree:1"** %"pat11:t1", align 8
+  %temp_call13 = call i1 @"fn4:treePrint"(%"tree:1"* %temp_id_load12)
+  %GC_malloc_call14 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call14, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr15 = bitcast i8* %GC_malloc_call14 to { i8*, i64 }*
+  %temp_struct_store_ptr16 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr15, i32 0, i32 0
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.4, i32 0, i32 0), i8** %temp_struct_store_ptr16, align 8
+  %temp_struct_store_ptr17 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr15, i32 0, i32 1
+  store i64 2, i64* %temp_struct_store_ptr17, align 4
+  %temp_call18 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr15)
+  %temp_id_load19 = load %"tree:1"*, %"tree:1"** %"pat12:t2", align 8
+  %temp_call20 = call i1 @"fn4:treePrint"(%"tree:1"* %temp_id_load19)
+  %GC_malloc_call21 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call21, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr22 = bitcast i8* %GC_malloc_call21 to { i8*, i64 }*
+  %temp_struct_store_ptr23 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr22, i32 0, i32 0
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.5, i32 0, i32 0), i8** %temp_struct_store_ptr23, align 8
+  %temp_struct_store_ptr24 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr22, i32 0, i32 1
+  store i64 2, i64* %temp_struct_store_ptr24, align 4
+  %temp_call25 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr22)
+  br label %match_finished
+
+match_failed:                                     ; preds = %match_failed, %match_param_check_2, %match_check_2
+  call void @_runtime_error(i8* getelementptr inbounds ([71 x i8], [71 x i8]* @str.2, i32 0, i32 0), i64 71)
+  br label %match_failed
+
+match_finished:                                   ; preds = %match_success_2, %match_success_1
+  %temp_match_phi = phi i1 [ false, %match_success_1 ], [ %temp_call25, %match_success_2 ]
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i1 %temp_match_phi
+}
+
+define i64 @"fn5:treeCount"(%"tree:1"* %0) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn5:treeCount:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn5:treeCount:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm8:t" = alloca %"tree:1"*, align 8
+  %"pat13:n" = alloca i64, align 8
+  %"pat14:t1" = alloca %"tree:1"*, align 8
+  %"pat15:t2" = alloca %"tree:1"*, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store %"tree:1"* %0, %"tree:1"** %"pm8:t", align 8
+  %temp_id_load = load %"tree:1"*, %"tree:1"** %"pm8:t", align 8
+  br label %match_check_1
+
+match_check_1:                                    ; preds = %body
+  %match_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load = load i64, i64* %match_tag_ptr, align 4
+  %tag_comp = icmp eq i64 1, %match_tag_load
+  br i1 %tag_comp, label %match_param_check_1, label %match_check_2
+
+match_param_check_1:                              ; preds = %match_check_1
+  %matched_type_to_constr_cast = bitcast %"tree:1"* %temp_id_load to %"tree:1:Nil"*
+  br i1 true, label %match_success_1, label %match_check_2
+
+match_success_1:                                  ; preds = %match_param_check_1
+  br label %match_finished
+
+match_check_2:                                    ; preds = %match_param_check_1, %match_check_1
+  %match_tag_ptr1 = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load2 = load i64, i64* %match_tag_ptr1, align 4
+  %tag_comp3 = icmp eq i64 2, %match_tag_load2
+  br i1 %tag_comp3, label %match_param_check_2, label %match_failed
+
+match_param_check_2:                              ; preds = %match_check_2
+  %matched_type_to_constr_cast4 = bitcast %"tree:1"* %temp_id_load to %"tree:1:Node"*
+  %temp_match_constr_param_load_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast4, i32 0, i32 1
+  %temp_match_constr_param_load = load i64, i64* %temp_match_constr_param_load_ptr, align 4
+  %temp_match_constr_param_load_ptr5 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast4, i32 0, i32 2
+  %temp_match_constr_param_load6 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr5, align 8
+  %temp_match_constr_param_load_ptr7 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast4, i32 0, i32 3
+  %temp_match_constr_param_load8 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr7, align 8
+  store i64 %temp_match_constr_param_load, i64* %"pat13:n", align 4
+  store %"tree:1"* %temp_match_constr_param_load6, %"tree:1"** %"pat14:t1", align 8
+  store %"tree:1"* %temp_match_constr_param_load8, %"tree:1"** %"pat15:t2", align 8
+  br i1 true, label %match_success_2, label %match_failed
+
+match_success_2:                                  ; preds = %match_param_check_2
+  %temp_id_load9 = load %"tree:1"*, %"tree:1"** %"pat14:t1", align 8
+  %temp_call = call i64 @"fn5:treeCount"(%"tree:1"* %temp_id_load9)
+  %binary_int_add = add i64 1, %temp_call
+  %temp_id_load10 = load %"tree:1"*, %"tree:1"** %"pat15:t2", align 8
+  %temp_call11 = call i64 @"fn5:treeCount"(%"tree:1"* %temp_id_load10)
+  %binary_int_add12 = add i64 %binary_int_add, %temp_call11
+  br label %match_finished
+
+match_failed:                                     ; preds = %match_failed, %match_param_check_2, %match_check_2
+  call void @_runtime_error(i8* getelementptr inbounds ([71 x i8], [71 x i8]* @str.2, i32 0, i32 0), i64 71)
+  br label %match_failed
+
+match_finished:                                   ; preds = %match_success_2, %match_success_1
+  %temp_match_phi = phi i64 [ 0, %match_success_1 ], [ %binary_int_add12, %match_success_2 ]
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i64 %temp_match_phi
+}
+
+define i64 @"fn6:next"(i1 %0) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn6:next:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn6:next:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm9:u" = alloca i1, align 1
+  br label %body
+
+body:                                             ; preds = %entry
+  store i1 %0, i1* %"pm9:u", align 1
+  %display_array_ptr_load1 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %casted_frame_ptr = bitcast i8* %display_array_ptr_load1 to { i64* }*
+  %"mv1:seed:temp_gep" = getelementptr inbounds { i64* }, { i64* }* %casted_frame_ptr, i32 0, i32 0
+  %temp_id_load = load i64*, i64** %"mv1:seed:temp_gep", align 8
+  %display_array_ptr_load2 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %casted_frame_ptr3 = bitcast i8* %display_array_ptr_load2 to { i64* }*
+  %"mv1:seed:temp_gep4" = getelementptr inbounds { i64* }, { i64* }* %casted_frame_ptr3, i32 0, i32 0
+  %temp_id_load5 = load i64*, i64** %"mv1:seed:temp_gep4", align 8
+  %unary_ref = load i64, i64* %temp_id_load5, align 4
+  %binary_int_mul = mul i64 %unary_ref, 4241
+  %binary_int_add = add i64 %binary_int_mul, 22
+  %binary_int_mod = srem i64 %binary_int_add, 9949
+  store i64 %binary_int_mod, i64* %temp_id_load, align 4
+  %display_array_ptr_load6 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %casted_frame_ptr7 = bitcast i8* %display_array_ptr_load6 to { i64* }*
+  %"mv1:seed:temp_gep8" = getelementptr inbounds { i64* }, { i64* }* %casted_frame_ptr7, i32 0, i32 0
+  %temp_id_load9 = load i64*, i64** %"mv1:seed:temp_gep8", align 8
+  %unary_ref10 = load i64, i64* %temp_id_load9, align 4
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i64 %unary_ref10
+}
+
+define i64 @"fn7:random"(i64 %0) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn7:random:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn7:random:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm10:max" = alloca i64, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store i64 %0, i64* %"pm10:max", align 4
+  %temp_call = call i64 @"fn6:next"(i1 false)
+  %temp_id_load = load i64, i64* %"pm10:max", align 4
+  %binary_int_mod = srem i64 %temp_call, %temp_id_load
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i64 %binary_int_mod
+}
+
+define i64 @"fn8:choose"(%"tree:1"* %0) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn8:choose:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn8:choose:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm11:t" = alloca %"tree:1"*, align 8
+  %"pat16:n" = alloca i64, align 8
+  %"pat17:t1" = alloca %"tree:1"*, align 8
+  %"pat18:t2" = alloca %"tree:1"*, align 8
+  %"cv2:c1" = alloca i64, align 8
+  %"cv3:c2" = alloca i64, align 8
+  %"cv4:r" = alloca i64, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store %"tree:1"* %0, %"tree:1"** %"pm11:t", align 8
+  %temp_id_load = load %"tree:1"*, %"tree:1"** %"pm11:t", align 8
+  br label %match_check_1
+
+match_check_1:                                    ; preds = %body
+  %match_tag_ptr = getelementptr inbounds %"tree:1", %"tree:1"* %temp_id_load, i32 0, i32 0
+  %match_tag_load = load i64, i64* %match_tag_ptr, align 4
+  %tag_comp = icmp eq i64 2, %match_tag_load
+  br i1 %tag_comp, label %match_param_check_1, label %match_failed
+
+match_param_check_1:                              ; preds = %match_check_1
+  %matched_type_to_constr_cast = bitcast %"tree:1"* %temp_id_load to %"tree:1:Node"*
+  %temp_match_constr_param_load_ptr = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast, i32 0, i32 1
+  %temp_match_constr_param_load = load i64, i64* %temp_match_constr_param_load_ptr, align 4
+  %temp_match_constr_param_load_ptr1 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast, i32 0, i32 2
+  %temp_match_constr_param_load2 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr1, align 8
+  %temp_match_constr_param_load_ptr3 = getelementptr inbounds %"tree:1:Node", %"tree:1:Node"* %matched_type_to_constr_cast, i32 0, i32 3
+  %temp_match_constr_param_load4 = load %"tree:1"*, %"tree:1"** %temp_match_constr_param_load_ptr3, align 8
+  store i64 %temp_match_constr_param_load, i64* %"pat16:n", align 4
+  store %"tree:1"* %temp_match_constr_param_load2, %"tree:1"** %"pat17:t1", align 8
+  store %"tree:1"* %temp_match_constr_param_load4, %"tree:1"** %"pat18:t2", align 8
+  br i1 true, label %match_success_1, label %match_failed
+
+match_success_1:                                  ; preds = %match_param_check_1
+  %temp_id_load5 = load %"tree:1"*, %"tree:1"** %"pat17:t1", align 8
+  %temp_call = call i64 @"fn5:treeCount"(%"tree:1"* %temp_id_load5)
+  store i64 %temp_call, i64* %"cv2:c1", align 4
+  %temp_id_load6 = load %"tree:1"*, %"tree:1"** %"pat18:t2", align 8
+  %temp_call7 = call i64 @"fn5:treeCount"(%"tree:1"* %temp_id_load6)
+  store i64 %temp_call7, i64* %"cv3:c2", align 4
+  %temp_id_load8 = load i64, i64* %"cv2:c1", align 4
+  %binary_int_add = add i64 1, %temp_id_load8
+  %temp_id_load9 = load i64, i64* %"cv3:c2", align 4
+  %binary_int_add10 = add i64 %binary_int_add, %temp_id_load9
+  %temp_call11 = call i64 @"fn7:random"(i64 %binary_int_add10)
+  store i64 %temp_call11, i64* %"cv4:r", align 4
+  %temp_id_load12 = load i64, i64* %"cv4:r", align 4
+  %int_equality_check = icmp eq i64 %temp_id_load12, 0
+  br i1 %int_equality_check, label %if_then, label %if_else
+
+if_then:                                          ; preds = %match_success_1
+  %temp_id_load13 = load i64, i64* %"pat16:n", align 4
+  br label %if_merge
+
+if_else:                                          ; preds = %match_success_1
+  %temp_id_load17 = load i64, i64* %"cv4:r", align 4
+  %temp_id_load18 = load i64, i64* %"cv2:c1", align 4
+  %binary_leq = icmp sle i64 %temp_id_load17, %temp_id_load18
+  br i1 %binary_leq, label %if_then14, label %if_else15
+
+if_then14:                                        ; preds = %if_else
+  %temp_id_load19 = load %"tree:1"*, %"tree:1"** %"pat17:t1", align 8
+  %temp_call20 = call i64 @"fn8:choose"(%"tree:1"* %temp_id_load19)
+  br label %if_merge16
+
+if_else15:                                        ; preds = %if_else
+  %temp_id_load21 = load %"tree:1"*, %"tree:1"** %"pat18:t2", align 8
+  %temp_call22 = call i64 @"fn8:choose"(%"tree:1"* %temp_id_load21)
+  br label %if_merge16
+
+if_merge16:                                       ; preds = %if_else15, %if_then14
+  %temp_phi = phi i64 [ %temp_call20, %if_then14 ], [ %temp_call22, %if_else15 ]
+  br label %if_merge
+
+if_merge:                                         ; preds = %if_merge16, %if_then
+  %temp_phi23 = phi i64 [ %temp_id_load13, %if_then ], [ %temp_phi, %if_merge16 ]
+  br label %match_finished
+
+match_failed:                                     ; preds = %match_failed, %match_param_check_1, %match_check_1
+  call void @_runtime_error(i8* getelementptr inbounds ([71 x i8], [71 x i8]* @str.2, i32 0, i32 0), i64 71)
+  br label %match_failed
+
+match_finished:                                   ; preds = %if_merge
+  %temp_match_phi = phi i64 [ %temp_phi23, %if_merge ]
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i64 %temp_match_phi
+}

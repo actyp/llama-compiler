@@ -1,0 +1,42 @@
+(* errors caught on substitute *)
+
+(* invalid type errors *)
+let mutable mtbl_array: (array of int)
+let mtbl_dyn_array = new (array of int)
+let mutable mtbl_array_array [1]: (array of int)
+let func_ret_func = let f x = x and g x = x in f g
+
+(* delete non dyn_ref *)
+type t = A | B
+let main = let mutable a: int in a := 1; delete a
+
+(* binary operators special invalid parameter types *)
+let f x = x + 1 and mutable arr [1]: int
+let sp1 = f = f
+let sp2 = arr <> arr
+let sp3 = f == f
+let sp4 = arr != arr
+let sp5 = f > f
+let sp6 = arr < arr
+let sp7 = f <= f
+let sp8 = arr >= arr
+
+(* the expression in match is non of a user defined data type *)
+let f19 x = match x with y -> y end
+
+(* rec failure *)
+let rec a = 1 + a
+let rec a = 1 and b = a
+let rec mutable a and b = a
+let rec mutable a [1] and b = a[0]
+let rec f x = x and a = f
+let rec a = 1 and b = 2 and c = let rec a = b + 1 in 1
+
+(* type overwriting *)
+type t = T1
+type t = T2 | T3
+type t = T3
+let a: t = T2
+let a: t = T1
+let a = T1 = T2
+let a = T2 = T3

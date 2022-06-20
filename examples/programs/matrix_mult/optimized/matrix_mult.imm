@@ -1,0 +1,1087 @@
+; ModuleID = 'llama'
+source_filename = "llama"
+
+@display_array = local_unnamed_addr global [2 x i8*] zeroinitializer
+@0 = private unnamed_addr constant [33 x i8] c"Runtime Error: Division by zero\0A\00", align 1
+@1 = private unnamed_addr constant [54 x i8] c"Runtime Error: Out of bounds error in array ref call\0A\00", align 1
+@2 = private unnamed_addr constant [2 x i8] c" \00", align 1
+@3 = private unnamed_addr constant [2 x i8] c"\0A\00", align 1
+@4 = private unnamed_addr constant [9 x i8] c"\0Atimes\0A\0A\00", align 1
+@5 = private unnamed_addr constant [9 x i8] c"\0Amakes\0A\0A\00", align 1
+
+declare i1 @lla_print_int(i64) local_unnamed_addr
+
+declare i1 @lla_print_string({ i8*, i64 }*) local_unnamed_addr
+
+declare i1 @lla_exit_with_error({ i8*, i64 }*, i64) local_unnamed_addr
+
+declare i8* @GC_init() local_unnamed_addr
+
+declare i8* @GC_malloc(i64) local_unnamed_addr
+
+declare void @GC_register_finalizer(i8*, void (i8*, i8*)*, i8*, void (i8*, i8*)**, i8**) local_unnamed_addr
+
+define void @_free_array_of_malloc(i8* nocapture readonly %0, i8* nocapture readnone %1) {
+  %3 = bitcast i8* %0 to i8**
+  %4 = load i8*, i8** %3, align 8
+  tail call void @free(i8* %4)
+  ret void
+}
+
+declare void @free(i8*) local_unnamed_addr
+
+define void @_runtime_error(i8* %0, i64 %1) local_unnamed_addr {
+  %3 = tail call i8* @GC_malloc(i64 16)
+  tail call void @GC_register_finalizer(i8* %3, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %4 = bitcast i8* %3 to { i8*, i64 }*
+  %5 = bitcast i8* %3 to i8**
+  store i8* %0, i8** %5, align 8
+  %6 = getelementptr inbounds i8, i8* %3, i64 8
+  %7 = bitcast i8* %6 to i64*
+  store i64 %1, i64* %7, align 4
+  %8 = tail call i1 @lla_exit_with_error({ i8*, i64 }* %4, i64 1)
+  ret void
+}
+
+define i64 @_binary_int_division(i64 %0, i64 %1) local_unnamed_addr {
+  %3 = icmp eq i64 %1, 0
+  br i1 %3, label %.preheader, label %11
+
+.preheader:                                       ; preds = %2
+  br label %4
+
+4:                                                ; preds = %.preheader, %4
+  %5 = tail call i8* @GC_malloc(i64 16)
+  tail call void @GC_register_finalizer(i8* %5, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %6 = bitcast i8* %5 to { i8*, i64 }*
+  %7 = bitcast i8* %5 to i8**
+  store i8* getelementptr inbounds ([33 x i8], [33 x i8]* @0, i64 0, i64 0), i8** %7, align 8
+  %8 = getelementptr inbounds i8, i8* %5, i64 8
+  %9 = bitcast i8* %8 to i64*
+  store i64 33, i64* %9, align 4
+  %10 = tail call i1 @lla_exit_with_error({ i8*, i64 }* %6, i64 1)
+  br label %4
+
+11:                                               ; preds = %2
+  %12 = sdiv i64 %0, %1
+  ret i64 %12
+}
+
+define float @_binary_float_division(float %0, float %1) local_unnamed_addr {
+  %3 = fcmp oeq float %1, 0.000000e+00
+  br i1 %3, label %.preheader, label %11
+
+.preheader:                                       ; preds = %2
+  br label %4
+
+4:                                                ; preds = %.preheader, %4
+  %5 = tail call i8* @GC_malloc(i64 16)
+  tail call void @GC_register_finalizer(i8* %5, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %6 = bitcast i8* %5 to { i8*, i64 }*
+  %7 = bitcast i8* %5 to i8**
+  store i8* getelementptr inbounds ([33 x i8], [33 x i8]* @0, i64 0, i64 0), i8** %7, align 8
+  %8 = getelementptr inbounds i8, i8* %5, i64 8
+  %9 = bitcast i8* %8 to i64*
+  store i64 33, i64* %9, align 4
+  %10 = tail call i1 @lla_exit_with_error({ i8*, i64 }* %6, i64 1)
+  br label %4
+
+11:                                               ; preds = %2
+  %12 = fdiv float %0, %1
+  ret float %12
+}
+
+define i64 @main() local_unnamed_addr {
+  %1 = tail call i8* @GC_init()
+  %2 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %3 = alloca { i64* }, align 8
+  store { i64* }* %3, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %4 = call i8* @GC_malloc(i64 8)
+  %5 = bitcast { i64* }* %3 to i8**
+  store i8* %4, i8** %5, align 8
+  %6 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %7 = getelementptr inbounds { i64* }, { i64* }* %6, i64 0, i32 0
+  %8 = load i64*, i64** %7, align 8
+  store i64 65, i64* %8, align 4
+  %9 = tail call dereferenceable_or_null(96) i8* @malloc(i32 96)
+  %10 = call i8* @GC_malloc(i64 24)
+  call void @GC_register_finalizer(i8* %10, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %11 = bitcast i8* %10 to { i64*, i64, i64 }*
+  %12 = bitcast i8* %10 to i8**
+  store i8* %9, i8** %12, align 8
+  %13 = getelementptr inbounds i8, i8* %10, i64 8
+  %14 = bitcast i8* %13 to i64*
+  store i64 3, i64* %14, align 4
+  %15 = getelementptr inbounds i8, i8* %10, i64 16
+  %16 = bitcast i8* %15 to i64*
+  store i64 4, i64* %16, align 4
+  %17 = tail call dereferenceable_or_null(160) i8* @malloc(i32 160)
+  %18 = call i8* @GC_malloc(i64 24)
+  call void @GC_register_finalizer(i8* %18, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %19 = bitcast i8* %18 to { i64*, i64, i64 }*
+  %20 = bitcast i8* %18 to i8**
+  store i8* %17, i8** %20, align 8
+  %21 = getelementptr inbounds i8, i8* %18, i64 8
+  %22 = bitcast i8* %21 to i64*
+  store i64 4, i64* %22, align 4
+  %23 = getelementptr inbounds i8, i8* %18, i64 16
+  %24 = bitcast i8* %23 to i64*
+  store i64 5, i64* %24, align 4
+  %25 = tail call dereferenceable_or_null(120) i8* @malloc(i32 120)
+  %26 = call i8* @GC_malloc(i64 24)
+  call void @GC_register_finalizer(i8* %26, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %27 = bitcast i8* %26 to { i64*, i64, i64 }*
+  %28 = bitcast i8* %26 to i8**
+  store i8* %25, i8** %28, align 8
+  %29 = getelementptr inbounds i8, i8* %26, i64 8
+  %30 = bitcast i8* %29 to i64*
+  store i64 3, i64* %30, align 4
+  %31 = getelementptr inbounds i8, i8* %26, i64 16
+  %32 = bitcast i8* %31 to i64*
+  store i64 5, i64* %32, align 4
+  %33 = call i1 @"fn2:minit"({ i64*, i64, i64 }* %11)
+  %34 = call i1 @"fn2:minit"({ i64*, i64, i64 }* %19)
+  %35 = call i1 @"fn3:mprint"({ i64*, i64, i64 }* %11)
+  %36 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %36, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %37 = bitcast i8* %36 to { i8*, i64 }*
+  %38 = bitcast i8* %36 to i8**
+  store i8* getelementptr inbounds ([9 x i8], [9 x i8]* @4, i64 0, i64 0), i8** %38, align 8
+  %39 = getelementptr inbounds i8, i8* %36, i64 8
+  %40 = bitcast i8* %39 to i64*
+  store i64 9, i64* %40, align 4
+  %41 = call i1 @lla_print_string({ i8*, i64 }* %37)
+  %42 = call i1 @"fn3:mprint"({ i64*, i64, i64 }* %19)
+  %43 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %43, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %44 = bitcast i8* %43 to { i8*, i64 }*
+  %45 = bitcast i8* %43 to i8**
+  store i8* getelementptr inbounds ([9 x i8], [9 x i8]* @5, i64 0, i64 0), i8** %45, align 8
+  %46 = getelementptr inbounds i8, i8* %43, i64 8
+  %47 = bitcast i8* %46 to i64*
+  store i64 9, i64* %47, align 4
+  %48 = call i1 @lla_print_string({ i8*, i64 }* %44)
+  %49 = call i1 @"fn1:mmult"({ i64*, i64, i64 }* %11, { i64*, i64, i64 }* %19, { i64*, i64, i64 }* %27)
+  %50 = call i1 @"fn3:mprint"({ i64*, i64, i64 }* %27)
+  store i8* %2, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  ret i64 0
+}
+
+define i1 @"fn1:mmult"({ i64*, i64, i64 }* %0, { i64*, i64, i64 }* %1, { i64*, i64, i64 }* %2) local_unnamed_addr {
+  %4 = alloca {}, align 8
+  %.reg2mem = alloca i64, align 8
+  %.reg2mem228 = alloca i64, align 8
+  %.lcssa.reg2mem = alloca i64, align 8
+  %split.reg2mem = alloca i64, align 8
+  %.reg2mem231 = alloca i64, align 8
+  %.reg2mem234 = alloca i64, align 8
+  %.reg2mem237 = alloca i64, align 8
+  %split.ph.us.reg2mem = alloca i64, align 8
+  %.reg2mem243 = alloca i64, align 8
+  %.reg2mem246 = alloca i64, align 8
+  %.reg2mem249 = alloca i64, align 8
+  %.reg2mem252 = alloca i64, align 8
+  %.reg2mem254 = alloca i64, align 8
+  %.reg2mem257 = alloca i64*, align 8
+  %.reg2mem259 = alloca i64, align 8
+  %.reg2mem262 = alloca i64, align 8
+  %.reg2mem268 = alloca i64, align 8
+  %.reg2mem274 = alloca i64, align 8
+  %.reg2mem277 = alloca i64, align 8
+  %.reg2mem280 = alloca i64, align 8
+  %.reg2mem287 = alloca i64, align 8
+  %.reg2mem302 = alloca i1, align 1
+  %.reg2mem304 = alloca i64, align 8
+  %.reg2mem307 = alloca i64, align 8
+  %.reg2mem317 = alloca i64*, align 8
+  %.reg2mem320 = alloca i64*, align 8
+  %.reg2mem324 = alloca i64**, align 8
+  %.reg2mem326 = alloca i64**, align 8
+  %.reg2mem328 = alloca i64*, align 8
+  %.reg2mem330 = alloca i64**, align 8
+  %.reg2mem333 = alloca i64**, align 8
+  %.reg2mem336 = alloca i64*, align 8
+  %.reg2mem339 = alloca i64*, align 8
+  %.reg2mem342 = alloca i64*, align 8
+  %.reg2mem344 = alloca i64**, align 8
+  %.reg2mem346 = alloca i64*, align 8
+  %.reg2mem348 = alloca i64*, align 8
+  %.reg2mem350 = alloca i64*, align 8
+  %.reg2mem352 = alloca i64, align 8
+  %.reg2mem355 = alloca i64*, align 8
+  %.reg2mem359 = alloca i64*, align 8
+  %.reg2mem362 = alloca i64*, align 8
+  %.reg2mem366 = alloca i8*, align 8
+  %.reg2mem368 = alloca i64, align 8
+  %.lcssa.reg2mem370 = alloca i64, align 8
+  %.reg2mem372 = alloca i64, align 8
+  %split.reg2mem374 = alloca i64, align 8
+  %.reg2mem376 = alloca i64, align 8
+  %split.ph.us.reg2mem378 = alloca i64, align 8
+  %.reg2mem380 = alloca i64, align 8
+  %.reg2mem382 = alloca i64, align 8
+  %.reg2mem384 = alloca i64, align 8
+  %.reg2mem386 = alloca i64, align 8
+  %.reg2mem388 = alloca i64, align 8
+  %5 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %5, i8** %.reg2mem366, align 8
+  store {}* %4, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %6 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 2
+  store i64* %6, i64** %.reg2mem362, align 8
+  %7 = load i64, i64* %6, align 4
+  %8 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %1, i64 0, i32 1
+  store i64* %8, i64** %.reg2mem359, align 8
+  %9 = load i64, i64* %8, align 4
+  %.not = icmp eq i64 %7, %9
+  br i1 %.not, label %16, label %..critedge_crit_edge
+
+..critedge_crit_edge:                             ; preds = %3
+  br label %.critedge
+
+10:                                               ; preds = %22
+  store i64* %17, i64** %.reg2mem355, align 8
+  %11 = load i64, i64* %17, align 4
+  %12 = add i64 %11, -1
+  store i64 %12, i64* %.reg2mem352, align 4
+  store i64* %23, i64** %.reg2mem350, align 8
+  store i64* %17, i64** %.reg2mem348, align 8
+  store i64* %23, i64** %.reg2mem346, align 8
+  %13 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %2, i64 0, i32 0
+  store i64** %13, i64*** %.reg2mem344, align 8
+  store i64* %6, i64** %.reg2mem342, align 8
+  store i64* %17, i64** %.reg2mem339, align 8
+  store i64* %23, i64** %.reg2mem336, align 8
+  store i64** %13, i64*** %.reg2mem333, align 8
+  store i64** %13, i64*** %.reg2mem330, align 8
+  store i64* %19, i64** %.reg2mem328, align 8
+  %14 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 0
+  store i64** %14, i64*** %.reg2mem326, align 8
+  %15 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %1, i64 0, i32 0
+  store i64** %15, i64*** %.reg2mem324, align 8
+  %.reload353 = load i64, i64* %.reg2mem352, align 4
+  %.not203215 = icmp sgt i64 0, %.reload353
+  br i1 %.not203215, label %..critedge.loopexit_crit_edge218, label %.lr.ph217
+
+..critedge.loopexit_crit_edge218:                 ; preds = %10
+  br label %.critedge.loopexit
+
+.lr.ph217:                                        ; preds = %10
+  store i64 0, i64* %.reg2mem388, align 4
+  br label %28
+
+16:                                               ; preds = %3
+  %17 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %2, i64 0, i32 1
+  %18 = load i64, i64* %17, align 4
+  %19 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 1
+  %20 = load i64, i64* %19, align 4
+  %21 = icmp ne i64 %18, %20
+  br i1 %21, label %..critedge_crit_edge219, label %22
+
+..critedge_crit_edge219:                          ; preds = %16
+  br label %.critedge
+
+22:                                               ; preds = %16
+  %23 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %2, i64 0, i32 2
+  store i64* %23, i64** %.reg2mem320, align 8
+  %24 = load i64, i64* %23, align 4
+  %25 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %1, i64 0, i32 2
+  store i64* %25, i64** %.reg2mem317, align 8
+  %26 = load i64, i64* %25, align 4
+  %27 = icmp eq i64 %24, %26
+  br i1 %27, label %10, label %..critedge_crit_edge220
+
+..critedge_crit_edge220:                          ; preds = %22
+  br label %.critedge
+
+28:                                               ; preds = %._crit_edge226, %.lr.ph217
+  %.reload389 = load i64, i64* %.reg2mem388, align 4
+  store i64 %.reload389, i64* %.reg2mem307, align 4
+  %.reload351 = load i64*, i64** %.reg2mem350, align 8
+  %29 = load i64, i64* %.reload351, align 4
+  %30 = add i64 %29, -1
+  store i64 %30, i64* %.reg2mem304, align 4
+  %.reload314 = load i64, i64* %.reg2mem307, align 4
+  %31 = icmp sgt i64 %.reload314, -1
+  store i1 %31, i1* %.reg2mem302, align 1
+  %.reload305 = load i64, i64* %.reg2mem304, align 4
+  %.not204211 = icmp sgt i64 0, %.reload305
+  br i1 %.not204211, label %._crit_edge221, label %.lr.ph213
+
+._crit_edge221:                                   ; preds = %28
+  %.reload313 = load i64, i64* %.reg2mem307, align 4
+  store i64 %.reload313, i64* %.reg2mem368, align 4
+  br label %157
+
+.lr.ph213:                                        ; preds = %28
+  %.reload316 = load i64, i64* %.reg2mem307, align 4
+  store i64 %.reload316, i64* %.reg2mem384, align 4
+  store i64 0, i64* %.reg2mem386, align 4
+  br label %32
+
+32:                                               ; preds = %._crit_edge225, %.lr.ph213
+  %.reload387 = load i64, i64* %.reg2mem386, align 4
+  %.reload385 = load i64, i64* %.reg2mem384, align 4
+  store i64 %.reload387, i64* %.reg2mem287, align 4
+  store i64 %.reload385, i64* %.reg2mem280, align 4
+  %.reload349 = load i64*, i64** %.reg2mem348, align 8
+  %33 = load i64, i64* %.reload349, align 4
+  %.reload347 = load i64*, i64** %.reg2mem346, align 8
+  %34 = load i64, i64* %.reload347, align 4
+  store i64 %34, i64* %.reg2mem277, align 4
+  %.reload284 = load i64, i64* %.reg2mem280, align 4
+  %35 = icmp sgt i64 %.reload284, -1
+  %36 = icmp slt i64 %.reload284, %33
+  %37 = and i1 %35, %36
+  %.reload297 = load i64, i64* %.reg2mem287, align 4
+  %38 = icmp slt i64 %.reload297, %34
+  %39 = and i1 %37, %38
+  br i1 %39, label %47, label %.preheader170
+
+.preheader170:                                    ; preds = %32
+  br label %40
+
+40:                                               ; preds = %.preheader170, %40
+  %41 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %41, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %42 = bitcast i8* %41 to { i8*, i64 }*
+  %43 = bitcast i8* %41 to i8**
+  store i8* getelementptr inbounds ([54 x i8], [54 x i8]* @1, i64 0, i64 0), i8** %43, align 8
+  %44 = getelementptr inbounds i8, i8* %41, i64 8
+  %45 = bitcast i8* %44 to i64*
+  store i64 54, i64* %45, align 4
+  %46 = call i1 @lla_exit_with_error({ i8*, i64 }* %42, i64 1)
+  br label %40
+
+47:                                               ; preds = %32
+  %48 = mul i64 %34, %.reload284
+  %49 = add i64 %48, %.reload297
+  %.reload345 = load i64**, i64*** %.reg2mem344, align 8
+  %50 = load i64*, i64** %.reload345, align 8
+  %51 = getelementptr i64, i64* %50, i64 %49
+  store i64 0, i64* %51, align 4
+  %.reload343 = load i64*, i64** %.reg2mem342, align 8
+  %52 = load i64, i64* %.reload343, align 4
+  %53 = add i64 %52, -1
+  store i64 %53, i64* %.reg2mem274, align 4
+  %.not205210 = icmp sgt i64 0, %53
+  br i1 %.not205210, label %._crit_edge222, label %.lr.ph
+
+._crit_edge222:                                   ; preds = %47
+  %.reload285 = load i64, i64* %.reg2mem280, align 4
+  %.reload295 = load i64, i64* %.reg2mem287, align 4
+  store i64 %.reload285, i64* %.lcssa.reg2mem370, align 4
+  store i64 %.reload295, i64* %.reg2mem372, align 4
+  br label %155
+
+.lr.ph:                                           ; preds = %47
+  %.reload303 = load i1, i1* %.reg2mem302, align 1
+  br i1 %.reload303, label %.lr.ph.split.us, label %.lr.ph..lr.ph.split_crit_edge
+
+.lr.ph..lr.ph.split_crit_edge:                    ; preds = %.lr.ph
+  br label %.lr.ph.split
+
+.lr.ph.split.us:                                  ; preds = %.lr.ph
+  %.reload281 = load i64, i64* %.reg2mem280, align 4
+  store i64 %.reload281, i64* %.reg2mem380, align 4
+  store i64 0, i64* %.reg2mem382, align 4
+  br label %54
+
+54:                                               ; preds = %._crit_edge223, %.lr.ph.split.us
+  %.reload383 = load i64, i64* %.reg2mem382, align 4
+  %.reload381 = load i64, i64* %.reg2mem380, align 4
+  store i64 %.reload383, i64* %.reg2mem268, align 4
+  store i64 %.reload381, i64* %.reg2mem262, align 4
+  %.reload340 = load i64*, i64** %.reg2mem339, align 8
+  %55 = load i64, i64* %.reload340, align 4
+  %.reload337 = load i64*, i64** %.reg2mem336, align 8
+  %56 = load i64, i64* %.reload337, align 4
+  store i64 %56, i64* %.reg2mem259, align 4
+  %.reload267 = load i64, i64* %.reg2mem262, align 4
+  %57 = icmp sgt i64 %.reload267, -1
+  %58 = icmp slt i64 %.reload267, %55
+  %59 = and i1 %57, %58
+  %.reload293 = load i64, i64* %.reg2mem287, align 4
+  %60 = icmp slt i64 %.reload293, %56
+  %61 = and i1 %59, %60
+  br i1 %61, label %62, label %.preheader169.us-lcssa.us
+
+62:                                               ; preds = %54
+  %63 = mul i64 %56, %.reload267
+  %64 = add i64 %63, %.reload293
+  %.reload334 = load i64**, i64*** %.reg2mem333, align 8
+  %65 = load i64*, i64** %.reload334, align 8
+  %66 = getelementptr i64, i64* %65, i64 %64
+  store i64* %66, i64** %.reg2mem257, align 8
+  %.reload356 = load i64*, i64** %.reg2mem355, align 8
+  %67 = load i64, i64* %.reload356, align 4
+  %.reload321 = load i64*, i64** %.reg2mem320, align 8
+  %68 = load i64, i64* %.reload321, align 4
+  store i64 %68, i64* %.reg2mem254, align 4
+  %.reload264 = load i64, i64* %.reg2mem262, align 4
+  %69 = icmp slt i64 %.reload264, %67
+  %.reload291 = load i64, i64* %.reg2mem287, align 4
+  %70 = icmp slt i64 %.reload291, %68
+  %71 = and i1 %69, %70
+  br i1 %71, label %72, label %.preheader168.us-lcssa.us
+
+72:                                               ; preds = %62
+  %73 = mul i64 %68, %.reload264
+  %74 = add i64 %73, %.reload291
+  %.reload331 = load i64**, i64*** %.reg2mem330, align 8
+  %75 = load i64*, i64** %.reload331, align 8
+  %76 = getelementptr i64, i64* %75, i64 %74
+  %77 = load i64, i64* %76, align 4
+  store i64 %77, i64* %.reg2mem252, align 4
+  %.reload329 = load i64*, i64** %.reg2mem328, align 8
+  %78 = load i64, i64* %.reload329, align 4
+  %.reload363 = load i64*, i64** %.reg2mem362, align 8
+  %79 = load i64, i64* %.reload363, align 4
+  store i64 %79, i64* %.reg2mem249, align 4
+  %.reload310 = load i64, i64* %.reg2mem307, align 4
+  %80 = icmp slt i64 %.reload310, %78
+  %.reload273 = load i64, i64* %.reg2mem268, align 4
+  %81 = icmp slt i64 %.reload273, %79
+  %82 = and i1 %80, %81
+  br i1 %82, label %83, label %.preheader167.us-lcssa.us
+
+83:                                               ; preds = %72
+  %.reload360 = load i64*, i64** %.reg2mem359, align 8
+  %84 = load i64, i64* %.reload360, align 4
+  %.reload318 = load i64*, i64** %.reg2mem317, align 8
+  %85 = load i64, i64* %.reload318, align 4
+  store i64 %85, i64* %.reg2mem246, align 4
+  %.reload272 = load i64, i64* %.reg2mem268, align 4
+  %86 = icmp slt i64 %.reload272, %84
+  %.reload289 = load i64, i64* %.reg2mem287, align 4
+  %87 = icmp slt i64 %.reload289, %85
+  %88 = and i1 %86, %87
+  br i1 %88, label %89, label %.preheader.us-lcssa.us
+
+89:                                               ; preds = %83
+  %.reload327 = load i64**, i64*** %.reg2mem326, align 8
+  %90 = load i64*, i64** %.reload327, align 8
+  %.reload250 = load i64, i64* %.reg2mem249, align 4
+  %.reload309 = load i64, i64* %.reg2mem307, align 4
+  %91 = mul i64 %.reload250, %.reload309
+  %92 = add i64 %91, %.reload272
+  %93 = getelementptr i64, i64* %90, i64 %92
+  %94 = load i64, i64* %93, align 4
+  %95 = mul i64 %85, %.reload272
+  %96 = add i64 %95, %.reload289
+  %.reload325 = load i64**, i64*** %.reg2mem324, align 8
+  %97 = load i64*, i64** %.reload325, align 8
+  %98 = getelementptr i64, i64* %97, i64 %96
+  %99 = load i64, i64* %98, align 4
+  %100 = mul i64 %99, %94
+  %.reload253 = load i64, i64* %.reg2mem252, align 4
+  %101 = add i64 %100, %.reload253
+  %.reload258 = load i64*, i64** %.reg2mem257, align 8
+  store i64 %101, i64* %.reload258, align 4
+  %.reload269 = load i64, i64* %.reg2mem268, align 4
+  %102 = add nuw i64 %.reload269, 1
+  store i64 %102, i64* %.reg2mem243, align 4
+  %.reload275 = load i64, i64* %.reg2mem274, align 4
+  %.not205.us = icmp sgt i64 %102, %.reload275
+  %.reload308 = load i64, i64* %.reg2mem307, align 4
+  store i64 %.reload308, i64* %split.ph.us.reg2mem378, align 4
+  br i1 %.not205.us, label %._crit_edge.us-lcssa.us, label %._crit_edge223
+
+._crit_edge223:                                   ; preds = %89
+  %.reload245 = load i64, i64* %.reg2mem243, align 4
+  %.reload311 = load i64, i64* %.reg2mem307, align 4
+  store i64 %.reload311, i64* %.reg2mem380, align 4
+  store i64 %.reload245, i64* %.reg2mem382, align 4
+  br label %54
+
+.preheader169.us-lcssa.us:                        ; preds = %54
+  br label %.preheader169
+
+.preheader168.us-lcssa.us:                        ; preds = %62
+  br label %.preheader168
+
+.preheader167.us-lcssa.us:                        ; preds = %72
+  br label %.preheader167
+
+.preheader.us-lcssa.us:                           ; preds = %83
+  br label %.preheader
+
+._crit_edge.us-lcssa.us:                          ; preds = %89
+  store i64 %.reload308, i64* %split.ph.us.reg2mem, align 4
+  store i64 %.reload308, i64* %split.reg2mem374, align 4
+  br label %._crit_edge
+
+.lr.ph.split:                                     ; preds = %.lr.ph..lr.ph.split_crit_edge
+  %.reload286 = load i64, i64* %.reg2mem280, align 4
+  store i64 %.reload286, i64* %.reg2mem376, align 4
+  br label %103
+
+103:                                              ; preds = %._crit_edge224, %.lr.ph.split
+  %.reload377 = load i64, i64* %.reg2mem376, align 4
+  store i64 %.reload377, i64* %.reg2mem237, align 4
+  %.reload341 = load i64*, i64** %.reg2mem339, align 8
+  %104 = load i64, i64* %.reload341, align 4
+  %.reload338 = load i64*, i64** %.reg2mem336, align 8
+  %105 = load i64, i64* %.reload338, align 4
+  store i64 %105, i64* %.reg2mem234, align 4
+  %.reload242 = load i64, i64* %.reg2mem237, align 4
+  %106 = icmp sgt i64 %.reload242, -1
+  %107 = icmp slt i64 %.reload242, %104
+  %108 = and i1 %106, %107
+  %.reload300 = load i64, i64* %.reg2mem287, align 4
+  %109 = icmp slt i64 %.reload300, %105
+  %110 = and i1 %108, %109
+  br i1 %110, label %118, label %.preheader169.us-lcssa
+
+.preheader169.us-lcssa:                           ; preds = %103
+  br label %.preheader169
+
+.preheader169:                                    ; preds = %.preheader169.us-lcssa.us, %.preheader169.us-lcssa
+  br label %111
+
+111:                                              ; preds = %.preheader169, %111
+  %112 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %112, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %113 = bitcast i8* %112 to { i8*, i64 }*
+  %114 = bitcast i8* %112 to i8**
+  store i8* getelementptr inbounds ([54 x i8], [54 x i8]* @1, i64 0, i64 0), i8** %114, align 8
+  %115 = getelementptr inbounds i8, i8* %112, i64 8
+  %116 = bitcast i8* %115 to i64*
+  store i64 54, i64* %116, align 4
+  %117 = call i1 @lla_exit_with_error({ i8*, i64 }* %113, i64 1)
+  br label %111
+
+118:                                              ; preds = %103
+  %119 = mul i64 %105, %.reload242
+  %120 = add i64 %119, %.reload300
+  %.reload335 = load i64**, i64*** %.reg2mem333, align 8
+  %121 = load i64*, i64** %.reload335, align 8
+  %.reload357 = load i64*, i64** %.reg2mem355, align 8
+  %122 = load i64, i64* %.reload357, align 4
+  %.reload322 = load i64*, i64** %.reg2mem320, align 8
+  %123 = load i64, i64* %.reload322, align 4
+  store i64 %123, i64* %.reg2mem231, align 4
+  %.reload241 = load i64, i64* %.reg2mem237, align 4
+  %124 = icmp slt i64 %.reload241, %122
+  %.reload298 = load i64, i64* %.reg2mem287, align 4
+  %125 = icmp slt i64 %.reload298, %123
+  %126 = and i1 %124, %125
+  br i1 %126, label %134, label %.preheader168.us-lcssa
+
+.preheader168.us-lcssa:                           ; preds = %118
+  br label %.preheader168
+
+.preheader168:                                    ; preds = %.preheader168.us-lcssa.us, %.preheader168.us-lcssa
+  br label %127
+
+127:                                              ; preds = %.preheader168, %127
+  %128 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %128, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %129 = bitcast i8* %128 to { i8*, i64 }*
+  %130 = bitcast i8* %128 to i8**
+  store i8* getelementptr inbounds ([54 x i8], [54 x i8]* @1, i64 0, i64 0), i8** %130, align 8
+  %131 = getelementptr inbounds i8, i8* %128, i64 8
+  %132 = bitcast i8* %131 to i64*
+  store i64 54, i64* %132, align 4
+  %133 = call i1 @lla_exit_with_error({ i8*, i64 }* %129, i64 1)
+  br label %127
+
+134:                                              ; preds = %118
+  %135 = mul i64 %123, %.reload241
+  %136 = add i64 %135, %.reload298
+  %.reload332 = load i64**, i64*** %.reg2mem330, align 8
+  %137 = load i64*, i64** %.reload332, align 8
+  %138 = getelementptr i64, i64* %137, i64 %136
+  %.reload364 = load i64*, i64** %.reg2mem362, align 8
+  br i1 false, label %146, label %.preheader167.us-lcssa
+
+.preheader167.us-lcssa:                           ; preds = %134
+  br label %.preheader167
+
+.preheader167:                                    ; preds = %.preheader167.us-lcssa.us, %.preheader167.us-lcssa
+  br label %139
+
+139:                                              ; preds = %.preheader167, %139
+  %140 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %140, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %141 = bitcast i8* %140 to { i8*, i64 }*
+  %142 = bitcast i8* %140 to i8**
+  store i8* getelementptr inbounds ([54 x i8], [54 x i8]* @1, i64 0, i64 0), i8** %142, align 8
+  %143 = getelementptr inbounds i8, i8* %140, i64 8
+  %144 = bitcast i8* %143 to i64*
+  store i64 54, i64* %144, align 4
+  %145 = call i1 @lla_exit_with_error({ i8*, i64 }* %141, i64 1)
+  br label %139
+
+146:                                              ; preds = %134
+  br i1 undef, label %154, label %.preheader.us-lcssa
+
+.preheader.us-lcssa:                              ; preds = %146
+  br label %.preheader
+
+.preheader:                                       ; preds = %.preheader.us-lcssa.us, %.preheader.us-lcssa
+  br label %147
+
+147:                                              ; preds = %.preheader, %147
+  %148 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %148, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %149 = bitcast i8* %148 to { i8*, i64 }*
+  %150 = bitcast i8* %148 to i8**
+  store i8* getelementptr inbounds ([54 x i8], [54 x i8]* @1, i64 0, i64 0), i8** %150, align 8
+  %151 = getelementptr inbounds i8, i8* %148, i64 8
+  %152 = bitcast i8* %151 to i64*
+  store i64 54, i64* %152, align 4
+  %153 = call i1 @lla_exit_with_error({ i8*, i64 }* %149, i64 1)
+  br label %147
+
+154:                                              ; preds = %146
+  br i1 undef, label %._crit_edge.us-lcssa, label %._crit_edge224
+
+._crit_edge224:                                   ; preds = %154
+  %.reload315 = load i64, i64* %.reg2mem307, align 4
+  store i64 %.reload315, i64* %.reg2mem376, align 4
+  br label %103
+
+._crit_edge.us-lcssa:                             ; preds = %154
+  store i64 undef, i64* %split.reg2mem374, align 4
+  br label %._crit_edge
+
+._crit_edge:                                      ; preds = %._crit_edge.us-lcssa.us, %._crit_edge.us-lcssa
+  %split.reload375 = load i64, i64* %split.reg2mem374, align 4
+  store i64 %split.reload375, i64* %split.reg2mem, align 4
+  %.reload294 = load i64, i64* %.reg2mem287, align 4
+  store i64 %split.reload375, i64* %.lcssa.reg2mem370, align 4
+  store i64 %.reload294, i64* %.reg2mem372, align 4
+  br label %155
+
+155:                                              ; preds = %._crit_edge222, %._crit_edge
+  %.reload373 = load i64, i64* %.reg2mem372, align 4
+  %.lcssa.reload371 = load i64, i64* %.lcssa.reg2mem370, align 4
+  store i64 %.lcssa.reload371, i64* %.lcssa.reg2mem, align 4
+  %156 = add nuw i64 %.reload373, 1
+  store i64 %156, i64* %.reg2mem228, align 4
+  %.reload306 = load i64, i64* %.reg2mem304, align 4
+  %.not204 = icmp sgt i64 %156, %.reload306
+  br i1 %.not204, label %._crit_edge214, label %._crit_edge225
+
+._crit_edge225:                                   ; preds = %155
+  %.lcssa.reload = load i64, i64* %.lcssa.reg2mem, align 4
+  store i64 %.lcssa.reload, i64* %.reg2mem384, align 4
+  store i64 %156, i64* %.reg2mem386, align 4
+  br label %32
+
+._crit_edge214:                                   ; preds = %155
+  %.reload312 = load i64, i64* %.reg2mem307, align 4
+  store i64 %.reload312, i64* %.reg2mem368, align 4
+  br label %157
+
+157:                                              ; preds = %._crit_edge221, %._crit_edge214
+  %.reload369 = load i64, i64* %.reg2mem368, align 4
+  %158 = add i64 %.reload369, 1
+  store i64 %158, i64* %.reg2mem, align 4
+  %.reload354 = load i64, i64* %.reg2mem352, align 4
+  %.not203 = icmp sgt i64 %158, %.reload354
+  br i1 %.not203, label %..critedge.loopexit_crit_edge, label %._crit_edge226
+
+._crit_edge226:                                   ; preds = %157
+  store i64 %158, i64* %.reg2mem388, align 4
+  br label %28
+
+..critedge.loopexit_crit_edge:                    ; preds = %157
+  br label %.critedge.loopexit
+
+.critedge.loopexit:                               ; preds = %..critedge.loopexit_crit_edge218, %..critedge.loopexit_crit_edge
+  br label %.critedge
+
+.critedge:                                        ; preds = %..critedge_crit_edge220, %..critedge_crit_edge219, %..critedge_crit_edge, %.critedge.loopexit
+  %.reload367 = load i8*, i8** %.reg2mem366, align 8
+  store i8* %.reload367, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i1 false
+}
+
+define i1 @"fn2:minit"({ i64*, i64, i64 }* %0) local_unnamed_addr {
+  %2 = alloca {}, align 8
+  %.reg2mem = alloca i64, align 8
+  %.reg2mem49 = alloca i64, align 8
+  %.reg2mem52 = alloca i64, align 8
+  %.reg2mem55 = alloca i64, align 8
+  %.reg2mem60 = alloca i1, align 1
+  %.reg2mem62 = alloca i64, align 8
+  %.reg2mem65 = alloca i64, align 8
+  %.reg2mem68 = alloca i64, align 8
+  %.reg2mem75 = alloca i64**, align 8
+  %.reg2mem77 = alloca i64*, align 8
+  %.reg2mem80 = alloca i64*, align 8
+  %.reg2mem82 = alloca i64, align 8
+  %.reg2mem85 = alloca i64*, align 8
+  %.reg2mem88 = alloca i8*, align 8
+  %.reg2mem90 = alloca i64, align 8
+  %.reg2mem92 = alloca i64, align 8
+  %.reg2mem94 = alloca i64, align 8
+  %3 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %3, i8** %.reg2mem88, align 8
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %4 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 1
+  store i64* %4, i64** %.reg2mem85, align 8
+  %5 = load i64, i64* %4, align 4
+  %6 = add i64 %5, -1
+  store i64 %6, i64* %.reg2mem82, align 4
+  %7 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 2
+  store i64* %7, i64** %.reg2mem80, align 8
+  store i64* %7, i64** %.reg2mem77, align 8
+  %8 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 0
+  store i64** %8, i64*** %.reg2mem75, align 8
+  %.reload83 = load i64, i64* %.reg2mem82, align 4
+  %.not39 = icmp sgt i64 0, %.reload83
+  br i1 %.not39, label %._crit_edge43, label %.lr.ph41
+
+._crit_edge43:                                    ; preds = %1
+  br label %56
+
+.lr.ph41:                                         ; preds = %1
+  store i64 0, i64* %.reg2mem94, align 4
+  br label %9
+
+9:                                                ; preds = %._crit_edge47, %.lr.ph41
+  %.reload95 = load i64, i64* %.reg2mem94, align 4
+  store i64 %.reload95, i64* %.reg2mem68, align 4
+  %.reload81 = load i64*, i64** %.reg2mem80, align 8
+  %10 = load i64, i64* %.reload81, align 4
+  %11 = add i64 %10, -1
+  store i64 %11, i64* %.reg2mem65, align 4
+  %.reload73 = load i64, i64* %.reg2mem68, align 4
+  %12 = shl i64 %.reload73, 1
+  store i64 %12, i64* %.reg2mem62, align 4
+  %.reload74 = load i64, i64* %.reg2mem68, align 4
+  %13 = icmp sgt i64 %.reload74, -1
+  store i1 %13, i1* %.reg2mem60, align 1
+  %.reload67 = load i64, i64* %.reg2mem65, align 4
+  %.not3738 = icmp sgt i64 0, %.reload67
+  br i1 %.not3738, label %._crit_edge44, label %.lr.ph
+
+._crit_edge44:                                    ; preds = %9
+  %.reload72 = load i64, i64* %.reg2mem68, align 4
+  store i64 %.reload72, i64* %.reg2mem90, align 4
+  br label %54
+
+.lr.ph:                                           ; preds = %9
+  br i1 %13, label %.lr.ph.split.us, label %.lr.ph..lr.ph.split_crit_edge
+
+.lr.ph..lr.ph.split_crit_edge:                    ; preds = %.lr.ph
+  br label %.lr.ph.split
+
+.lr.ph.split.us:                                  ; preds = %.lr.ph
+  store i64 0, i64* %.reg2mem92, align 4
+  br label %14
+
+14:                                               ; preds = %._crit_edge45, %.lr.ph.split.us
+  %.reload93 = load i64, i64* %.reg2mem92, align 4
+  store i64 %.reload93, i64* %.reg2mem55, align 4
+  %15 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %16 = getelementptr inbounds { i64* }, { i64* }* %15, i64 0, i32 0
+  %17 = load i64*, i64** %16, align 8
+  %18 = load i64, i64* %17, align 4
+  %19 = mul i64 %18, 137
+  %.reload63 = load i64, i64* %.reg2mem62, align 4
+  %20 = add i64 %.reload93, %.reload63
+  %21 = add i64 %20, %19
+  %22 = srem i64 %21, 101
+  store i64 %22, i64* %17, align 4
+  %.reload86 = load i64*, i64** %.reg2mem85, align 8
+  %23 = load i64, i64* %.reload86, align 4
+  %.reload78 = load i64*, i64** %.reg2mem77, align 8
+  %24 = load i64, i64* %.reload78, align 4
+  store i64 %24, i64* %.reg2mem52, align 4
+  %.reload70 = load i64, i64* %.reg2mem68, align 4
+  %25 = icmp slt i64 %.reload70, %23
+  %.reload59 = load i64, i64* %.reg2mem55, align 4
+  %26 = icmp slt i64 %.reload59, %24
+  %27 = and i1 %25, %26
+  br i1 %27, label %28, label %.preheader.us-lcssa.us
+
+28:                                               ; preds = %14
+  %29 = mul i64 %24, %.reload70
+  %30 = add i64 %29, %.reload59
+  %.reload76 = load i64**, i64*** %.reg2mem75, align 8
+  %31 = load i64*, i64** %.reload76, align 8
+  %32 = getelementptr i64, i64* %31, i64 %30
+  %33 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %34 = getelementptr inbounds { i64* }, { i64* }* %33, i64 0, i32 0
+  %35 = load i64*, i64** %34, align 8
+  %36 = load i64, i64* %35, align 4
+  store i64 %36, i64* %32, align 4
+  %.reload57 = load i64, i64* %.reg2mem55, align 4
+  %37 = add nuw i64 %.reload57, 1
+  store i64 %37, i64* %.reg2mem49, align 4
+  %.reload66 = load i64, i64* %.reg2mem65, align 4
+  %.not37.us = icmp sgt i64 %37, %.reload66
+  br i1 %.not37.us, label %._crit_edge.us-lcssa.us, label %._crit_edge45
+
+._crit_edge45:                                    ; preds = %28
+  store i64 %37, i64* %.reg2mem92, align 4
+  br label %14
+
+.preheader.us-lcssa.us:                           ; preds = %14
+  br label %.preheader
+
+._crit_edge.us-lcssa.us:                          ; preds = %28
+  br label %._crit_edge
+
+.lr.ph.split:                                     ; preds = %.lr.ph..lr.ph.split_crit_edge
+  br label %38
+
+38:                                               ; preds = %._crit_edge46, %.lr.ph.split
+  %39 = load { i64* }*, { i64* }** bitcast ([2 x i8*]* @display_array to { i64* }**), align 8
+  %40 = getelementptr inbounds { i64* }, { i64* }* %39, i64 0, i32 0
+  %41 = load i64*, i64** %40, align 8
+  %42 = load i64, i64* %41, align 4
+  %43 = mul i64 %42, 137
+  %.reload64 = load i64, i64* %.reg2mem62, align 4
+  %44 = add i64 %.reload64, %43
+  %45 = srem i64 %44, 101
+  store i64 %45, i64* %41, align 4
+  %.reload79 = load i64*, i64** %.reg2mem77, align 8
+  br i1 false, label %53, label %.preheader.us-lcssa
+
+.preheader.us-lcssa:                              ; preds = %38
+  br label %.preheader
+
+.preheader:                                       ; preds = %.preheader.us-lcssa.us, %.preheader.us-lcssa
+  br label %46
+
+46:                                               ; preds = %.preheader, %46
+  %47 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %47, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %48 = bitcast i8* %47 to { i8*, i64 }*
+  %49 = bitcast i8* %47 to i8**
+  store i8* getelementptr inbounds ([54 x i8], [54 x i8]* @1, i64 0, i64 0), i8** %49, align 8
+  %50 = getelementptr inbounds i8, i8* %47, i64 8
+  %51 = bitcast i8* %50 to i64*
+  store i64 54, i64* %51, align 4
+  %52 = call i1 @lla_exit_with_error({ i8*, i64 }* %48, i64 1)
+  br label %46
+
+53:                                               ; preds = %38
+  br i1 undef, label %._crit_edge.us-lcssa, label %._crit_edge46
+
+._crit_edge46:                                    ; preds = %53
+  br label %38
+
+._crit_edge.us-lcssa:                             ; preds = %53
+  br label %._crit_edge
+
+._crit_edge:                                      ; preds = %._crit_edge.us-lcssa.us, %._crit_edge.us-lcssa
+  %.reload71 = load i64, i64* %.reg2mem68, align 4
+  store i64 %.reload71, i64* %.reg2mem90, align 4
+  br label %54
+
+54:                                               ; preds = %._crit_edge44, %._crit_edge
+  %.reload91 = load i64, i64* %.reg2mem90, align 4
+  %55 = add i64 %.reload91, 1
+  store i64 %55, i64* %.reg2mem, align 4
+  %.reload84 = load i64, i64* %.reg2mem82, align 4
+  %.not = icmp sgt i64 %55, %.reload84
+  br i1 %.not, label %._crit_edge42, label %._crit_edge47
+
+._crit_edge47:                                    ; preds = %54
+  store i64 %55, i64* %.reg2mem94, align 4
+  br label %9
+
+._crit_edge42:                                    ; preds = %54
+  br label %56
+
+56:                                               ; preds = %._crit_edge43, %._crit_edge42
+  %.reload89 = load i8*, i8** %.reg2mem88, align 8
+  store i8* %.reload89, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i1 false
+}
+
+define i1 @"fn3:mprint"({ i64*, i64, i64 }* %0) local_unnamed_addr {
+  %2 = alloca {}, align 8
+  %.reg2mem = alloca i64, align 8
+  %.reg2mem41 = alloca i64, align 8
+  %.reg2mem44 = alloca i64, align 8
+  %.reg2mem47 = alloca i64, align 8
+  %.reg2mem51 = alloca i1, align 1
+  %.reg2mem53 = alloca i64, align 8
+  %.reg2mem56 = alloca i64, align 8
+  %.reg2mem62 = alloca i64**, align 8
+  %.reg2mem64 = alloca i64*, align 8
+  %.reg2mem67 = alloca i64*, align 8
+  %.reg2mem69 = alloca i64, align 8
+  %.reg2mem72 = alloca i64*, align 8
+  %.reg2mem75 = alloca i8*, align 8
+  %.reg2mem77 = alloca i64, align 8
+  %.reg2mem79 = alloca i64, align 8
+  %.reg2mem81 = alloca i64, align 8
+  %3 = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  store i8* %3, i8** %.reg2mem75, align 8
+  store {}* %2, {}** bitcast (i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1) to {}**), align 8
+  %4 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 1
+  store i64* %4, i64** %.reg2mem72, align 8
+  %5 = load i64, i64* %4, align 4
+  %6 = add i64 %5, -1
+  store i64 %6, i64* %.reg2mem69, align 4
+  %7 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 2
+  store i64* %7, i64** %.reg2mem67, align 8
+  store i64* %7, i64** %.reg2mem64, align 8
+  %8 = getelementptr inbounds { i64*, i64, i64 }, { i64*, i64, i64 }* %0, i64 0, i32 0
+  store i64** %8, i64*** %.reg2mem62, align 8
+  %.reload70 = load i64, i64* %.reg2mem69, align 4
+  %.not31 = icmp sgt i64 0, %.reload70
+  br i1 %.not31, label %._crit_edge35, label %.lr.ph33
+
+._crit_edge35:                                    ; preds = %1
+  br label %50
+
+.lr.ph33:                                         ; preds = %1
+  store i64 0, i64* %.reg2mem81, align 4
+  br label %9
+
+9:                                                ; preds = %._crit_edge39, %.lr.ph33
+  %.reload82 = load i64, i64* %.reg2mem81, align 4
+  store i64 %.reload82, i64* %.reg2mem56, align 4
+  %.reload68 = load i64*, i64** %.reg2mem67, align 8
+  %10 = load i64, i64* %.reload68, align 4
+  %11 = add i64 %10, -1
+  store i64 %11, i64* %.reg2mem53, align 4
+  %.reload61 = load i64, i64* %.reg2mem56, align 4
+  %12 = icmp sgt i64 %.reload61, -1
+  store i1 %12, i1* %.reg2mem51, align 1
+  %.reload55 = load i64, i64* %.reg2mem53, align 4
+  %.not2930 = icmp sgt i64 0, %.reload55
+  br i1 %.not2930, label %._crit_edge36, label %.lr.ph
+
+._crit_edge36:                                    ; preds = %9
+  %.reload60 = load i64, i64* %.reg2mem56, align 4
+  store i64 %.reload60, i64* %.reg2mem77, align 4
+  br label %42
+
+.lr.ph:                                           ; preds = %9
+  br i1 %12, label %.lr.ph.split.us, label %.lr.ph..lr.ph.split_crit_edge
+
+.lr.ph..lr.ph.split_crit_edge:                    ; preds = %.lr.ph
+  br label %.lr.ph.split
+
+.lr.ph.split.us:                                  ; preds = %.lr.ph
+  store i64 0, i64* %.reg2mem79, align 4
+  br label %13
+
+13:                                               ; preds = %._crit_edge37, %.lr.ph.split.us
+  %.reload80 = load i64, i64* %.reg2mem79, align 4
+  store i64 %.reload80, i64* %.reg2mem47, align 4
+  %.reload73 = load i64*, i64** %.reg2mem72, align 8
+  %14 = load i64, i64* %.reload73, align 4
+  %.reload65 = load i64*, i64** %.reg2mem64, align 8
+  %15 = load i64, i64* %.reload65, align 4
+  store i64 %15, i64* %.reg2mem44, align 4
+  %.reload58 = load i64, i64* %.reg2mem56, align 4
+  %16 = icmp slt i64 %.reload58, %14
+  %.reload50 = load i64, i64* %.reg2mem47, align 4
+  %17 = icmp slt i64 %.reload50, %15
+  %18 = and i1 %16, %17
+  br i1 %18, label %19, label %.preheader.us-lcssa.us
+
+19:                                               ; preds = %13
+  %20 = mul i64 %15, %.reload58
+  %21 = add i64 %20, %.reload50
+  %.reload63 = load i64**, i64*** %.reg2mem62, align 8
+  %22 = load i64*, i64** %.reload63, align 8
+  %23 = getelementptr i64, i64* %22, i64 %21
+  %24 = load i64, i64* %23, align 4
+  %25 = call i1 @lla_print_int(i64 %24)
+  %26 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %26, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %27 = bitcast i8* %26 to { i8*, i64 }*
+  %28 = bitcast i8* %26 to i8**
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @2, i64 0, i64 0), i8** %28, align 8
+  %29 = getelementptr inbounds i8, i8* %26, i64 8
+  %30 = bitcast i8* %29 to i64*
+  store i64 2, i64* %30, align 4
+  %31 = call i1 @lla_print_string({ i8*, i64 }* %27)
+  %.reload48 = load i64, i64* %.reg2mem47, align 4
+  %32 = add nuw i64 %.reload48, 1
+  store i64 %32, i64* %.reg2mem41, align 4
+  %.reload54 = load i64, i64* %.reg2mem53, align 4
+  %.not29.us = icmp sgt i64 %32, %.reload54
+  br i1 %.not29.us, label %._crit_edge.us-lcssa.us, label %._crit_edge37
+
+._crit_edge37:                                    ; preds = %19
+  store i64 %32, i64* %.reg2mem79, align 4
+  br label %13
+
+.preheader.us-lcssa.us:                           ; preds = %13
+  br label %.preheader
+
+._crit_edge.us-lcssa.us:                          ; preds = %19
+  br label %._crit_edge
+
+.lr.ph.split:                                     ; preds = %.lr.ph..lr.ph.split_crit_edge
+  br label %33
+
+33:                                               ; preds = %._crit_edge38, %.lr.ph.split
+  %.reload66 = load i64*, i64** %.reg2mem64, align 8
+  br i1 false, label %41, label %.preheader.us-lcssa
+
+.preheader.us-lcssa:                              ; preds = %33
+  br label %.preheader
+
+.preheader:                                       ; preds = %.preheader.us-lcssa.us, %.preheader.us-lcssa
+  br label %34
+
+34:                                               ; preds = %.preheader, %34
+  %35 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %35, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %36 = bitcast i8* %35 to { i8*, i64 }*
+  %37 = bitcast i8* %35 to i8**
+  store i8* getelementptr inbounds ([54 x i8], [54 x i8]* @1, i64 0, i64 0), i8** %37, align 8
+  %38 = getelementptr inbounds i8, i8* %35, i64 8
+  %39 = bitcast i8* %38 to i64*
+  store i64 54, i64* %39, align 4
+  %40 = call i1 @lla_exit_with_error({ i8*, i64 }* %36, i64 1)
+  br label %34
+
+41:                                               ; preds = %33
+  br i1 undef, label %._crit_edge.us-lcssa, label %._crit_edge38
+
+._crit_edge38:                                    ; preds = %41
+  br label %33
+
+._crit_edge.us-lcssa:                             ; preds = %41
+  br label %._crit_edge
+
+._crit_edge:                                      ; preds = %._crit_edge.us-lcssa.us, %._crit_edge.us-lcssa
+  %.reload59 = load i64, i64* %.reg2mem56, align 4
+  store i64 %.reload59, i64* %.reg2mem77, align 4
+  br label %42
+
+42:                                               ; preds = %._crit_edge36, %._crit_edge
+  %.reload78 = load i64, i64* %.reg2mem77, align 4
+  %43 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %43, void (i8*, i8*)* nonnull @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %44 = bitcast i8* %43 to { i8*, i64 }*
+  %45 = bitcast i8* %43 to i8**
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @3, i64 0, i64 0), i8** %45, align 8
+  %46 = getelementptr inbounds i8, i8* %43, i64 8
+  %47 = bitcast i8* %46 to i64*
+  store i64 2, i64* %47, align 4
+  %48 = call i1 @lla_print_string({ i8*, i64 }* %44)
+  %49 = add i64 %.reload78, 1
+  store i64 %49, i64* %.reg2mem, align 4
+  %.reload71 = load i64, i64* %.reg2mem69, align 4
+  %.not = icmp sgt i64 %49, %.reload71
+  br i1 %.not, label %._crit_edge34, label %._crit_edge39
+
+._crit_edge39:                                    ; preds = %42
+  store i64 %49, i64* %.reg2mem81, align 4
+  br label %9
+
+._crit_edge34:                                    ; preds = %42
+  br label %50
+
+50:                                               ; preds = %._crit_edge35, %._crit_edge34
+  %.reload76 = load i8*, i8** %.reg2mem75, align 8
+  store i8* %.reload76, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i1 false
+}
+
+declare noalias i8* @malloc(i32) local_unnamed_addr

@@ -1,0 +1,279 @@
+; ModuleID = 'llama'
+source_filename = "llama"
+
+@display_array = global [2 x i8*] zeroinitializer
+@str = private unnamed_addr constant [33 x i8] c"Runtime Error: Division by zero\0A\00", align 1
+@str.1 = private unnamed_addr constant [14 x i8] c"Moving from: \00", align 1
+@str.2 = private unnamed_addr constant [5 x i8] c" to \00", align 1
+@str.3 = private unnamed_addr constant [2 x i8] c"\0A\00", align 1
+@str.4 = private unnamed_addr constant [35 x i8] c"Please, give the number of rings: \00", align 1
+@str.5 = private unnamed_addr constant [5 x i8] c"left\00", align 1
+@str.6 = private unnamed_addr constant [6 x i8] c"right\00", align 1
+@str.7 = private unnamed_addr constant [7 x i8] c"middle\00", align 1
+
+declare i1 @lla_print_int(i64)
+
+declare i1 @lla_print_bool(i1)
+
+declare i1 @lla_print_char(i8)
+
+declare i1 @lla_print_float(float)
+
+declare i1 @lla_print_string({ i8*, i64 }*)
+
+declare i64 @lla_read_int(i1)
+
+declare i1 @lla_read_bool(i1)
+
+declare i8 @lla_read_char(i1)
+
+declare float @lla_read_float(i1)
+
+declare i1 @lla_read_string({ i8*, i64 }*)
+
+declare i64 @lla_abs(i64)
+
+declare float @lla_fabs(float)
+
+declare float @lla_sqrt(float)
+
+declare float @lla_sin(float)
+
+declare float @lla_cos(float)
+
+declare float @lla_tan(float)
+
+declare float @lla_atan(float)
+
+declare float @lla_exp(float)
+
+declare float @lla_ln(float)
+
+declare float @lla_pi(i1)
+
+declare i1 @lla_incr(i64*)
+
+declare i1 @lla_decr(i64*)
+
+declare float @lla_float_of_int(i64)
+
+declare i64 @lla_int_of_float(float)
+
+declare i64 @lla_round(float)
+
+declare i64 @lla_int_of_char(i8)
+
+declare i8 @lla_char_of_int(i64)
+
+declare i64 @lla_strlen({ i8*, i64 }*)
+
+declare i64 @lla_strcmp({ i8*, i64 }*, { i8*, i64 }*)
+
+declare i1 @lla_strcpy({ i8*, i64 }*, { i8*, i64 }*)
+
+declare i1 @lla_strcat({ i8*, i64 }*, { i8*, i64 }*)
+
+declare float @lla_pow(float, float)
+
+declare i1 @lla_exit_with_error({ i8*, i64 }*, i64)
+
+declare i8* @GC_init()
+
+declare i8* @GC_malloc(i64)
+
+declare void @GC_register_finalizer(i8*, void (i8*, i8*)*, i8*, void (i8*, i8*)**, i8**)
+
+define void @_free_array_of_malloc(i8* %0, i8* %1) {
+entry:
+  %array_struct_ptr = bitcast i8* %0 to { i8*, i64 }*
+  %malloc_array_ptr_gep = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %array_struct_ptr, i32 0, i32 0
+  %malloc_array_ptr = load i8*, i8** %malloc_array_ptr_gep, align 8
+  tail call void @free(i8* %malloc_array_ptr)
+  ret void
+}
+
+declare void @free(i8*)
+
+define void @_runtime_error(i8* %0, i64 %1) {
+entry:
+  %GC_malloc_call = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %array_struct_ptr = bitcast i8* %GC_malloc_call to { i8*, i64 }*
+  %temp_struct_store_ptr = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %array_struct_ptr, i32 0, i32 0
+  store i8* %0, i8** %temp_struct_store_ptr, align 8
+  %temp_struct_store_ptr1 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %array_struct_ptr, i32 0, i32 1
+  store i64 %1, i64* %temp_struct_store_ptr1, align 4
+  %lla_exit_with_error_call = call i1 @lla_exit_with_error({ i8*, i64 }* %array_struct_ptr, i64 1)
+  ret void
+}
+
+define i64 @_binary_int_division(i64 %0, i64 %1) {
+entry:
+  %denom_zero_comp = icmp eq i64 0, %1
+  br i1 %denom_zero_comp, label %runtime_error, label %body
+
+runtime_error:                                    ; preds = %runtime_error, %entry
+  call void @_runtime_error(i8* getelementptr inbounds ([33 x i8], [33 x i8]* @str, i32 0, i32 0), i64 33)
+  br label %runtime_error
+
+body:                                             ; preds = %entry
+  %division = sdiv i64 %0, %1
+  ret i64 %division
+}
+
+define float @_binary_float_division(float %0, float %1) {
+entry:
+  %denom_zero_comp = fcmp oeq float 0.000000e+00, %1
+  br i1 %denom_zero_comp, label %runtime_error, label %body
+
+runtime_error:                                    ; preds = %runtime_error, %entry
+  call void @_runtime_error(i8* getelementptr inbounds ([33 x i8], [33 x i8]* @str, i32 0, i32 0), i64 33)
+  br label %runtime_error
+
+body:                                             ; preds = %entry
+  %division = fdiv float %0, %1
+  ret float %division
+}
+
+define i64 @main() {
+entry:
+  %0 = call i8* @GC_init()
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %"main:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"main:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  %"cv1:main" = alloca i1, align 1
+  %"cv2:n" = alloca i64, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  %GC_malloc_call = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr = bitcast i8* %GC_malloc_call to { i8*, i64 }*
+  %temp_struct_store_ptr = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr, i32 0, i32 0
+  store i8* getelementptr inbounds ([35 x i8], [35 x i8]* @str.4, i32 0, i32 0), i8** %temp_struct_store_ptr, align 8
+  %temp_struct_store_ptr1 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr, i32 0, i32 1
+  store i64 35, i64* %temp_struct_store_ptr1, align 4
+  %temp_call = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr)
+  %temp_call2 = call i64 @lla_read_int(i1 false)
+  store i64 %temp_call2, i64* %"cv2:n", align 4
+  %temp_id_load = load i64, i64* %"cv2:n", align 4
+  %GC_malloc_call3 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call3, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr4 = bitcast i8* %GC_malloc_call3 to { i8*, i64 }*
+  %temp_struct_store_ptr5 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr4, i32 0, i32 0
+  store i8* getelementptr inbounds ([5 x i8], [5 x i8]* @str.5, i32 0, i32 0), i8** %temp_struct_store_ptr5, align 8
+  %temp_struct_store_ptr6 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr4, i32 0, i32 1
+  store i64 5, i64* %temp_struct_store_ptr6, align 4
+  %GC_malloc_call7 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call7, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr8 = bitcast i8* %GC_malloc_call7 to { i8*, i64 }*
+  %temp_struct_store_ptr9 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr8, i32 0, i32 0
+  store i8* getelementptr inbounds ([6 x i8], [6 x i8]* @str.6, i32 0, i32 0), i8** %temp_struct_store_ptr9, align 8
+  %temp_struct_store_ptr10 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr8, i32 0, i32 1
+  store i64 6, i64* %temp_struct_store_ptr10, align 4
+  %GC_malloc_call11 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call11, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr12 = bitcast i8* %GC_malloc_call11 to { i8*, i64 }*
+  %temp_struct_store_ptr13 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr12, i32 0, i32 0
+  store i8* getelementptr inbounds ([7 x i8], [7 x i8]* @str.7, i32 0, i32 0), i8** %temp_struct_store_ptr13, align 8
+  %temp_struct_store_ptr14 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr12, i32 0, i32 1
+  store i64 7, i64* %temp_struct_store_ptr14, align 4
+  %temp_call15 = call i1 @"fn2:hanoi"(i64 %temp_id_load, { i8*, i64 }* %string_struct_ptr4, { i8*, i64 }* %string_struct_ptr8, { i8*, i64 }* %string_struct_ptr12)
+  store i1 %temp_call15, i1* %"cv1:main", align 1
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 0), align 8
+  ret i64 0
+}
+
+define i1 @"fn1:move"({ i8*, i64 }* %0, { i8*, i64 }* %1) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn1:move:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn1:move:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm1:source" = alloca { i8*, i64 }*, align 8
+  %"pm2:target" = alloca { i8*, i64 }*, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store { i8*, i64 }* %0, { i8*, i64 }** %"pm1:source", align 8
+  store { i8*, i64 }* %1, { i8*, i64 }** %"pm2:target", align 8
+  %GC_malloc_call = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr = bitcast i8* %GC_malloc_call to { i8*, i64 }*
+  %temp_struct_store_ptr = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr, i32 0, i32 0
+  store i8* getelementptr inbounds ([14 x i8], [14 x i8]* @str.1, i32 0, i32 0), i8** %temp_struct_store_ptr, align 8
+  %temp_struct_store_ptr1 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr, i32 0, i32 1
+  store i64 14, i64* %temp_struct_store_ptr1, align 4
+  %temp_call = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr)
+  %temp_id_load = load { i8*, i64 }*, { i8*, i64 }** %"pm1:source", align 8
+  %temp_call2 = call i1 @lla_print_string({ i8*, i64 }* %temp_id_load)
+  %GC_malloc_call3 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call3, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr4 = bitcast i8* %GC_malloc_call3 to { i8*, i64 }*
+  %temp_struct_store_ptr5 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr4, i32 0, i32 0
+  store i8* getelementptr inbounds ([5 x i8], [5 x i8]* @str.2, i32 0, i32 0), i8** %temp_struct_store_ptr5, align 8
+  %temp_struct_store_ptr6 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr4, i32 0, i32 1
+  store i64 5, i64* %temp_struct_store_ptr6, align 4
+  %temp_call7 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr4)
+  %temp_id_load8 = load { i8*, i64 }*, { i8*, i64 }** %"pm2:target", align 8
+  %temp_call9 = call i1 @lla_print_string({ i8*, i64 }* %temp_id_load8)
+  %GC_malloc_call10 = call i8* @GC_malloc(i64 16)
+  call void @GC_register_finalizer(i8* %GC_malloc_call10, void (i8*, i8*)* @_free_array_of_malloc, i8* null, void (i8*, i8*)** null, i8** null)
+  %string_struct_ptr11 = bitcast i8* %GC_malloc_call10 to { i8*, i64 }*
+  %temp_struct_store_ptr12 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr11, i32 0, i32 0
+  store i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.3, i32 0, i32 0), i8** %temp_struct_store_ptr12, align 8
+  %temp_struct_store_ptr13 = getelementptr inbounds { i8*, i64 }, { i8*, i64 }* %string_struct_ptr11, i32 0, i32 1
+  store i64 2, i64* %temp_struct_store_ptr13, align 4
+  %temp_call14 = call i1 @lla_print_string({ i8*, i64 }* %string_struct_ptr11)
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i1 %temp_call14
+}
+
+define i1 @"fn2:hanoi"(i64 %0, { i8*, i64 }* %1, { i8*, i64 }* %2, { i8*, i64 }* %3) {
+entry:
+  %display_array_ptr_load = load i8*, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"fn2:hanoi:frame_ptr" = alloca {}, align 8
+  %casted_elem_frame_ptr = bitcast {}* %"fn2:hanoi:frame_ptr" to i8*
+  store i8* %casted_elem_frame_ptr, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  %"pm3:rings" = alloca i64, align 8
+  %"pm4:source" = alloca { i8*, i64 }*, align 8
+  %"pm5:target" = alloca { i8*, i64 }*, align 8
+  %"pm6:auxil" = alloca { i8*, i64 }*, align 8
+  br label %body
+
+body:                                             ; preds = %entry
+  store i64 %0, i64* %"pm3:rings", align 4
+  store { i8*, i64 }* %1, { i8*, i64 }** %"pm4:source", align 8
+  store { i8*, i64 }* %2, { i8*, i64 }** %"pm5:target", align 8
+  store { i8*, i64 }* %3, { i8*, i64 }** %"pm6:auxil", align 8
+  %temp_id_load = load i64, i64* %"pm3:rings", align 4
+  %binary_gt = icmp sgt i64 %temp_id_load, 0
+  br i1 %binary_gt, label %if_then, label %if_else
+
+if_then:                                          ; preds = %body
+  %temp_id_load1 = load i64, i64* %"pm3:rings", align 4
+  %binary_int_sub = sub i64 %temp_id_load1, 1
+  %temp_id_load2 = load { i8*, i64 }*, { i8*, i64 }** %"pm4:source", align 8
+  %temp_id_load3 = load { i8*, i64 }*, { i8*, i64 }** %"pm6:auxil", align 8
+  %temp_id_load4 = load { i8*, i64 }*, { i8*, i64 }** %"pm5:target", align 8
+  %temp_call = call i1 @"fn2:hanoi"(i64 %binary_int_sub, { i8*, i64 }* %temp_id_load2, { i8*, i64 }* %temp_id_load3, { i8*, i64 }* %temp_id_load4)
+  %temp_id_load5 = load { i8*, i64 }*, { i8*, i64 }** %"pm4:source", align 8
+  %temp_id_load6 = load { i8*, i64 }*, { i8*, i64 }** %"pm5:target", align 8
+  %temp_call7 = call i1 @"fn1:move"({ i8*, i64 }* %temp_id_load5, { i8*, i64 }* %temp_id_load6)
+  %temp_id_load8 = load i64, i64* %"pm3:rings", align 4
+  %binary_int_sub9 = sub i64 %temp_id_load8, 1
+  %temp_id_load10 = load { i8*, i64 }*, { i8*, i64 }** %"pm6:auxil", align 8
+  %temp_id_load11 = load { i8*, i64 }*, { i8*, i64 }** %"pm5:target", align 8
+  %temp_id_load12 = load { i8*, i64 }*, { i8*, i64 }** %"pm4:source", align 8
+  %temp_call13 = call i1 @"fn2:hanoi"(i64 %binary_int_sub9, { i8*, i64 }* %temp_id_load10, { i8*, i64 }* %temp_id_load11, { i8*, i64 }* %temp_id_load12)
+  br label %if_merge
+
+if_else:                                          ; preds = %body
+  br label %if_merge
+
+if_merge:                                         ; preds = %if_else, %if_then
+  %temp_phi = phi i1 [ %temp_call13, %if_then ], [ false, %if_else ]
+  store i8* %display_array_ptr_load, i8** getelementptr inbounds ([2 x i8*], [2 x i8*]* @display_array, i64 0, i64 1), align 8
+  ret i1 %temp_phi
+}

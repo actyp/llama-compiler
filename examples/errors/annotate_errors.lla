@@ -1,0 +1,28 @@
+(* errors caught on annotate *)
+
+(* unbound variable/type errors *)
+let x = a_unboundvar
+let f14 x = 1 + a_unboundvar
+let f15 (x: a_unboundtype) = 1
+type t1 = T1 of a_unboundtype
+
+(* invalid dim num *)
+let mutable arraydec [1,1]
+let d = dim 3 arraydec
+
+(* multiple definitions in same group *)
+let x = 1
+and x = 2
+
+let rec x = 1
+and x = 2
+
+type t = T1
+and t = T2
+
+type a = A1 | A1
+
+let f x = 1
+and f y = 1
+
+let f x x x = 1
