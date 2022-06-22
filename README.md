@@ -173,7 +173,7 @@ The **Llvm IR Generation** phase traverses the a-converted **TAST** and having i
 
 ### Assembler
 ---
-The assembling phase reads Llvm IR code from **filename.imm** and compiles it into assembly language generating the **filename.asm** without linking yet. This way assembly is still readable. In case assembly requested to **std_out** with the command-line flag `-f`, then files **filename.imm** and **filenam.asm** are generated, but removed after printing the assembly to **std_out**. The default behaviour of **llamac** is to keep those two generated files. For the assembling **llc** already installed in the system is used. The command call can be found at [**src/Main.ml**](./src/Main.ml)
+The assembling phase reads Llvm IR code from **filename.imm** and compiles it into assembly language generating the **filename.asm** without linking yet. This way assembly is still readable. In case assembly requested to **std_out** with the command-line flag `-f`, then files **filename.imm** and **filename.asm** are generated, but removed after printing the assembly to **std_out**. The default behaviour of **llamac** is to keep those two generated files. For the assembling **llc** already installed in the system is used. The command call can be found at [**src/Main.ml**](./src/Main.ml)
 
 ### Linker
 ---
