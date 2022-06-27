@@ -372,3 +372,64 @@ let assert_print =
   let gen (u:unit) = let mutable m [1,2,3] in m in 
   let pp m = m[0,0,0] := T2 (T2 T1); pt !m[0,0,0] in 
   print_string "T2 T2 T1 = "; pp (gen ())
+
+
+(* external functions *)
+
+let assert_print = 
+  (* io_functions *)
+  print_string "Insert int: "; let v = read_int () in print_string "Inserted int: "; print_int v; nl ();
+  print_string "Insert bool: "; let v = read_bool () in print_string "Inserted bool: "; print_bool v; nl ();
+  print_string "Insert char: "; let v = read_char () in print_string "Inserted char: "; print_char v; nl ();
+  print_string "Insert float: "; let v = read_float () in print_string "Inserted float: "; print_float v; nl ();
+  print_string "Insert string of 3 chars: "; let mutable v [3] in read_string v; print_string "Inserted string: "; print_string v; nl ();
+
+  (* mathematical_functions *)
+  print_string "42 = abs(42) = "; print_int (abs 42); nl ();
+  print_string "42 = abs(-42) = "; print_int (abs (-42)); nl ();
+  print_string "4.2 = fabs(4.2) = "; print_float (fabs 4.2); nl ();
+  print_string "4.2 = fabs(-.4.2) = "; print_float (fabs (-.4.2)); nl ();
+  print_string "42.0 = sqrt(42.0 *. 42.0) = "; print_float (sqrt(42.0 *. 42.0)); nl ();
+  print_string "-0.91 = sin(42.0 (in radians)) = "; print_float (sin(42.0)); nl ();
+  print_string "-0.39 = cos(42.0) = "; print_float (cos(42.0)); nl ();
+  print_string "2.291 = tan(42.0) = "; print_float (tan(42.0)); nl ();
+  print_string "1.546 = atan(42.0) = "; print_float (atan(42.0)); nl ();
+  print_string "66.68 = exp(4.2) = "; print_float (exp(4.2)); nl ();
+  print_string "3.737 = ln(42.0) = "; print_float (ln(42.0)); nl ();
+  print_string "3.1415 = pi() = "; print_float (pi ()); nl ();
+
+  (* increment_functions *)
+  let mutable cnt in
+  print_string "Initial cnt: "; cnt := 0; print_int !cnt; nl();
+  print_string "Increment cnt: "; incr cnt; print_int !cnt; nl();
+  print_string "Decrement cnt: "; decr cnt; print_int !cnt; nl();
+
+  (* conversion_functions *)
+  print_string "42.0 = float_of_int 42 = "; print_float (float_of_int 42); nl ();
+  print_string "42 = int_of_float 42.0 = "; print_int (int_of_float 42.0); nl ();
+  print_string "4 = round 4.2 = "; print_int (round 4.2); nl ();
+  print_string "5 = round 4.5 = "; print_int (round 4.5); nl ();
+  print_string "97 = int_of_char 'a' = "; print_int (int_of_char 'a'); nl ();
+  print_string "a = char_of_int 97 = "; print_char (char_of_int 97); nl ();
+    
+  (* string_management_functions *)
+  print_string "5 = strlen \"hello\" = "; print_int (strlen "hello"); nl ();
+  print_string "0 = strcmp \"hello\" \"hello\" = "; print_int (strcmp "hello" "hello"); nl ();
+  print_string "<0 = strcmp \"hello\" \"world\" = "; print_int (strcmp "hello" "world"); nl ();
+  print_string ">0 = strcmp \"world\" \"hello\" = "; print_int (strcmp "world" "hello"); nl ();
+  let mutable dest [6] in
+  print_string "dest = \"\"; str_cpy dest \"hello\"; dest = "; strcpy dest "hello"; print_string dest; nl ();
+  
+  (* normal behaviour of strcpy and strcat *)
+  print_string "normal behaviour of strcpy and strcat with enough buffer size:\n";
+  let mutable dest [20] in
+  strcpy dest "hello";
+  strcat dest " world";
+  print_string " dest [20], strcpy dest \"hello\", strcat dest \" world\", dest = "; print_string dest; nl ();
+
+  (* undefined behaviour of strcpy and strcat, due to C implementation *)
+  print_string "undefined behaviour of strcpy and strcat with less buffer size:\n";
+  let mutable dest [1] in
+  strcpy dest "hello";
+  strcat dest " world";
+  print_string " dest [1], strcpy dest \"hello\", strcat dest \" world\", dest = "; print_string dest; nl ()

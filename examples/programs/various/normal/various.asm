@@ -122,6 +122,16 @@ _binary_float_division:                 # @_binary_float_division
 	.long	0x40a00000                      # float 5
 .LCPI4_1:
 	.long	0x40000000                      # float 2
+.LCPI4_2:
+	.long	0x40866666                      # float 4.19999981
+.LCPI4_3:
+	.long	0xc0866666                      # float -4.19999981
+.LCPI4_4:
+	.long	0x44dc8000                      # float 1764
+.LCPI4_5:
+	.long	0x42280000                      # float 42
+.LCPI4_6:
+	.long	0x40900000                      # float 4.5
 	.text
 	.globl	main
 	.p2align	4, 0x90
@@ -141,8 +151,8 @@ main:                                   # @main
 	.cfi_def_cfa_offset 48
 	pushq	%rbx
 	.cfi_def_cfa_offset 56
-	subq	$408, %rsp                      # imm = 0x198
-	.cfi_def_cfa_offset 464
+	subq	$472, %rsp                      # imm = 0x1D8
+	.cfi_def_cfa_offset 528
 	.cfi_offset %rbx, -56
 	.cfi_offset %r12, -48
 	.cfi_offset %r13, -40
@@ -152,16 +162,16 @@ main:                                   # @main
 	callq	GC_init@PLT
 	movq	display_array@GOTPCREL(%rip), %r12
 	movq	(%r12), %rax
-	movq	%rax, 136(%rsp)                 # 8-byte Spill
-	leaq	360(%rsp), %rax
+	movq	%rax, 192(%rsp)                 # 8-byte Spill
+	leaq	424(%rsp), %rax
 	movq	%rax, (%r12)
-	movb	$0, 360(%rsp)
-	movq	$1, 128(%rsp)
+	movb	$0, 424(%rsp)
+	movq	$1, 184(%rsp)
 	movq	(%r12), %rax
 	movb	$97, 1(%rax)
 	movq	(%r12), %rax
 	movb	$1, 2(%rax)
-	movl	$1078523331, 116(%rsp)          # imm = 0x4048F5C3
+	movl	$1078523331, 156(%rsp)          # imm = 0x4048F5C3
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -176,7 +186,7 @@ main:                                   # @main
 	leaq	.Lstr.1(%rip), %rbp
 	movq	%rbp, (%rbx)
 	movq	$4, 8(%rbx)
-	movq	%rbx, 296(%rsp)
+	movq	%rbx, 360(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -188,7 +198,7 @@ main:                                   # @main
 	callq	GC_register_finalizer@PLT
 	movq	%rbp, (%rbx)
 	movq	$4, 8(%rbx)
-	movq	%rbx, 288(%rsp)
+	movq	%rbx, 352(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -201,10 +211,10 @@ main:                                   # @main
 	leaq	.Lstr.2(%rip), %rax
 	movq	%rax, (%rbx)
 	movq	$5, 8(%rbx)
-	movq	%rbx, 280(%rsp)
+	movq	%rbx, 344(%rsp)
 	movl	$8, %edi
 	callq	GC_malloc@PLT
-	movq	%rax, 32(%rsp)
+	movq	%rax, 40(%rsp)
 	movl	$240, %edi
 	callq	malloc@PLT
 	movq	%rax, %r15
@@ -217,16 +227,16 @@ main:                                   # @main
 	xorl	%ecx, %ecx
 	xorl	%r8d, %r8d
 	callq	GC_register_finalizer@PLT
-	movq	%rbx, 56(%rsp)
+	movq	%rbx, 72(%rsp)
 	movq	%r15, (%rbx)
 	movq	$5, 8(%rbx)
 	movq	$3, 16(%rbx)
 	movq	$2, 24(%rbx)
-	movq	128(%rsp), %rax
-	movq	%rax, 352(%rsp)
-	movq	56(%rsp), %rax
+	movq	184(%rsp), %rax
+	movq	%rax, 416(%rsp)
+	movq	72(%rsp), %rax
 	movq	24(%rax), %rax
-	movq	%rax, 344(%rsp)
+	movq	%rax, 408(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -241,7 +251,7 @@ main:                                   # @main
 	movq	$9, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	128(%rsp), %rdi
+	movq	184(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -297,7 +307,7 @@ main:                                   # @main
 	movq	$11, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movss	116(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
+	movss	156(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
 	callq	lla_print_float@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -315,7 +325,7 @@ main:                                   # @main
 	movq	$12, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	296(%rsp), %rdi
+	movq	360(%rsp), %rdi
 	callq	lla_print_string@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -333,7 +343,7 @@ main:                                   # @main
 	movq	$12, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	288(%rsp), %rdi
+	movq	352(%rsp), %rdi
 	callq	lla_print_string@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -351,11 +361,11 @@ main:                                   # @main
 	movq	$12, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	280(%rsp), %rdi
+	movq	344(%rsp), %rdi
 	callq	lla_print_string@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
-	movq	32(%rsp), %rax
+	movq	40(%rsp), %rax
 	movq	$0, (%rax)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
@@ -371,12 +381,12 @@ main:                                   # @main
 	movq	$14, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	32(%rsp), %rax
+	movq	40(%rsp), %rax
 	movq	(%rax), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
-	movq	32(%rsp), %rdi
+	movq	40(%rsp), %rdi
 	callq	lla_incr@PLT
 	movl	$16, %edi
 	callq	GC_malloc@PLT
@@ -392,12 +402,12 @@ main:                                   # @main
 	movq	$18, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	32(%rsp), %rax
+	movq	40(%rsp), %rax
 	movq	(%rax), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
-	movq	32(%rsp), %rdi
+	movq	40(%rsp), %rdi
 	callq	lla_decr@PLT
 	movl	$16, %edi
 	callq	GC_malloc@PLT
@@ -413,7 +423,7 @@ main:                                   # @main
 	movq	$18, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	32(%rsp), %rax
+	movq	40(%rsp), %rax
 	movq	(%rax), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
@@ -421,7 +431,7 @@ main:                                   # @main
 	testb	%r13b, %r13b
 	jne	.LBB4_4
 # %bb.1:                                # %entry
-	movq	56(%rsp), %rax
+	movq	72(%rsp), %rax
 	cmpq	$5, 8(%rax)
 	jl	.LBB4_4
 # %bb.2:                                # %entry
@@ -455,7 +465,7 @@ main:                                   # @main
 	testb	%bpl, %bpl
 	jne	.LBB4_10
 # %bb.7:                                # %array_ref_bound_check_success
-	movq	56(%rsp), %rax
+	movq	72(%rsp), %rax
 	cmpq	$5, 8(%rax)
 	jl	.LBB4_10
 # %bb.8:                                # %array_ref_bound_check_success
@@ -476,11 +486,11 @@ main:                                   # @main
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
 	andb	$1, %al
-	movb	%al, 55(%rsp)
+	movb	%al, 63(%rsp)
 	movl	$3, %edi
 	callq	"fn5:f1"@PLT
 	andb	$1, %al
-	movb	%al, 54(%rsp)
+	movb	%al, 62(%rsp)
 	movq	(%r12), %rax
 	movq	$2, 8(%rax)
 	movq	(%r12), %rax
@@ -576,8 +586,8 @@ main:                                   # @main
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
 	andb	$1, %al
-	movb	%al, 53(%rsp)
-	movq	32(%rsp), %rax
+	movb	%al, 61(%rsp)
+	movq	40(%rsp), %rax
 	movq	$42, (%rax)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
@@ -593,7 +603,7 @@ main:                                   # @main
 	movq	$15, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	32(%rsp), %rdi
+	movq	40(%rsp), %rdi
 	callq	"fn14:f6"@PLT
 	movq	%rax, %rdi
 	callq	lla_print_int@PLT
@@ -602,7 +612,7 @@ main:                                   # @main
 	testb	%bpl, %bpl
 	jne	.LBB4_20
 # %bb.17:                               # %array_ref_bound_check_success189
-	movq	56(%rsp), %rax
+	movq	72(%rsp), %rax
 	cmpq	$0, 8(%rax)
 	jle	.LBB4_20
 # %bb.18:                               # %array_ref_bound_check_success189
@@ -629,7 +639,7 @@ main:                                   # @main
 	movq	$24, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	56(%rsp), %rdi
+	movq	72(%rsp), %rdi
 	callq	"fn15:f7"@PLT
 	movq	%rax, %rdi
 	callq	lla_print_int@PLT
@@ -655,11 +665,11 @@ main:                                   # @main
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
 	andb	$1, %al
-	movb	%al, 52(%rsp)
+	movb	%al, 60(%rsp)
 	movl	$24, %edi
 	callq	GC_malloc@PLT
 	movq	$1, (%rax)
-	movq	%rax, 336(%rsp)
+	movq	%rax, 400(%rsp)
 	movl	$24, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %r15
@@ -675,32 +685,32 @@ main:                                   # @main
 	movq	%rax, 16(%rbx)
 	movq	$1, 8(%r15)
 	movq	%rbx, 16(%r15)
-	movq	%r15, 328(%rsp)
+	movq	%r15, 392(%rsp)
 	movl	$24, %edi
 	callq	GC_malloc@PLT
 	movq	$1, (%rax)
-	movq	%rax, 272(%rsp)
+	movq	%rax, 336(%rsp)
 	movl	$24, %edi
 	callq	GC_malloc@PLT
 	movq	$1, (%rax)
-	movq	%rax, 264(%rsp)
+	movq	%rax, 328(%rsp)
 	movl	$24, %edi
 	callq	GC_malloc@PLT
 	movq	$2, (%rax)
-	movq	264(%rsp), %rcx
+	movq	328(%rsp), %rcx
 	movq	$1, 8(%rax)
 	movq	%rcx, 16(%rax)
-	movq	%rax, 256(%rsp)
+	movq	%rax, 320(%rsp)
 	movl	$24, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %r15
 	movq	$2, (%rax)
-	movq	256(%rsp), %r13
+	movq	320(%rsp), %r13
 	movl	$24, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
 	movq	$2, (%rax)
-	movq	272(%rsp), %rbp
+	movq	336(%rsp), %rbp
 	movl	$24, %edi
 	callq	GC_malloc@PLT
 	movq	$1, (%rax)
@@ -708,7 +718,7 @@ main:                                   # @main
 	movq	%rax, 16(%rbx)
 	movq	%r13, 8(%r15)
 	movq	%rbx, 16(%r15)
-	movq	%r15, 320(%rsp)
+	movq	%r15, 384(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -927,34 +937,34 @@ main:                                   # @main
 	callq	GC_malloc@PLT
 	movq	$1, (%rax)
 	movq	$1, 8(%rax)
-	movq	%rax, (%rsp)
+	movq	%rax, 8(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	$2, (%rax)
 	movl	$1066192077, 8(%rax)            # imm = 0x3F8CCCCD
-	movq	%rax, 80(%rsp)
+	movq	%rax, 96(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	$1, (%rax)
 	movq	$1, 8(%rax)
-	movq	%rax, 72(%rsp)
+	movq	%rax, 88(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	$3, (%rax)
 	movabsq	$4579260103035505869, %rbx      # imm = 0x3F8CCCCD3F8CCCCD
 	movq	%rbx, 8(%rax)
-	movq	%rax, 24(%rsp)
+	movq	%rax, 32(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	$3, (%rax)
 	movabsq	$4582862983596395725, %rcx      # imm = 0x3F99999A3F8CCCCD
 	movq	%rcx, 8(%rax)
-	movq	%rax, 64(%rsp)
+	movq	%rax, 80(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	$3, (%rax)
 	movq	%rbx, 8(%rax)
-	movq	%rax, 120(%rsp)
+	movq	%rax, 176(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -1001,71 +1011,71 @@ main:                                   # @main
 	movq	$9, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	(%rsp), %rax
+	movq	8(%rsp), %rax
+	subq	96(%rsp), %rax
+	xorl	%edi, %edi
+	sarq	$4, %rax
+	sete	%dil
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rax
+	subq	88(%rsp), %rax
+	xorl	%edi, %edi
+	sarq	$4, %rax
+	sete	%dil
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rax
+	subq	32(%rsp), %rax
+	xorl	%edi, %edi
+	sarq	$4, %rax
+	sete	%dil
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rax
 	subq	80(%rsp), %rax
-	xorl	%edi, %edi
-	sarq	$4, %rax
-	sete	%dil
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	(%rsp), %rax
-	subq	72(%rsp), %rax
-	xorl	%edi, %edi
-	sarq	$4, %rax
-	sete	%dil
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	(%rsp), %rax
-	subq	24(%rsp), %rax
-	xorl	%edi, %edi
-	sarq	$4, %rax
-	sete	%dil
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	(%rsp), %rax
-	subq	64(%rsp), %rax
 	xorl	%edi, %edi
 	sarq	$4, %rax
 	sete	%dil
@@ -1116,71 +1126,71 @@ main:                                   # @main
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	(%rsp), %rax
+	movq	8(%rsp), %rax
+	subq	96(%rsp), %rax
+	xorl	%edi, %edi
+	sarq	$4, %rax
+	setne	%dil
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbp, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rax
+	subq	88(%rsp), %rax
+	xorl	%edi, %edi
+	sarq	$4, %rax
+	setne	%dil
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbp, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rax
+	subq	32(%rsp), %rax
+	xorl	%edi, %edi
+	sarq	$4, %rax
+	setne	%dil
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbp, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rax
 	subq	80(%rsp), %rax
-	xorl	%edi, %edi
-	sarq	$4, %rax
-	setne	%dil
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%rbp, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	(%rsp), %rax
-	subq	72(%rsp), %rax
-	xorl	%edi, %edi
-	sarq	$4, %rax
-	setne	%dil
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%rbp, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	(%rsp), %rax
-	subq	24(%rsp), %rax
-	xorl	%edi, %edi
-	sarq	$4, %rax
-	setne	%dil
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%rbp, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	(%rsp), %rax
-	subq	64(%rsp), %rax
 	xorl	%edi, %edi
 	sarq	$4, %rax
 	setne	%dil
@@ -1214,7 +1224,7 @@ main:                                   # @main
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	(%rsp), %rdi
+	movq	8(%rsp), %rdi
 	movq	%rdi, %rsi
 	callq	"_number:1_equality"@PLT
 	movzbl	%al, %edi
@@ -1234,7 +1244,67 @@ main:                                   # @main
 	movq	$9, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	(%rsp), %rdi
+	movq	8(%rsp), %rdi
+	movq	96(%rsp), %rsi
+	callq	"_number:1_equality"@PLT
+	movzbl	%al, %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbp, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rdi
+	movq	88(%rsp), %rsi
+	callq	"_number:1_equality"@PLT
+	movzbl	%al, %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rdi
+	movq	32(%rsp), %rsi
+	callq	"_number:1_equality"@PLT
+	movzbl	%al, %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	32(%rsp), %rdi
 	movq	80(%rsp), %rsi
 	callq	"_number:1_equality"@PLT
 	movzbl	%al, %edi
@@ -1254,68 +1324,8 @@ main:                                   # @main
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	(%rsp), %rdi
-	movq	72(%rsp), %rsi
-	callq	"_number:1_equality"@PLT
-	movzbl	%al, %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	(%rsp), %rdi
-	movq	24(%rsp), %rsi
-	callq	"_number:1_equality"@PLT
-	movzbl	%al, %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	24(%rsp), %rdi
-	movq	64(%rsp), %rsi
-	callq	"_number:1_equality"@PLT
-	movzbl	%al, %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%rbp, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	24(%rsp), %rdi
-	movq	120(%rsp), %rsi
+	movq	32(%rsp), %rdi
+	movq	176(%rsp), %rsi
 	callq	"_number:1_equality"@PLT
 	movzbl	%al, %edi
 	callq	lla_print_bool@PLT
@@ -1348,7 +1358,7 @@ main:                                   # @main
 	movq	$9, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	(%rsp), %rdi
+	movq	8(%rsp), %rdi
 	movq	%rdi, %rsi
 	callq	"_number:1_equality"@PLT
 	xorb	$1, %al
@@ -1369,7 +1379,70 @@ main:                                   # @main
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	(%rsp), %rdi
+	movq	8(%rsp), %rdi
+	movq	96(%rsp), %rsi
+	callq	"_number:1_equality"@PLT
+	xorb	$1, %al
+	movzbl	%al, %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rdi
+	movq	88(%rsp), %rsi
+	callq	"_number:1_equality"@PLT
+	xorb	$1, %al
+	movzbl	%al, %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbp, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	8(%rsp), %rdi
+	movq	32(%rsp), %rsi
+	callq	"_number:1_equality"@PLT
+	xorb	$1, %al
+	movzbl	%al, %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbp, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	32(%rsp), %rdi
 	movq	80(%rsp), %rsi
 	callq	"_number:1_equality"@PLT
 	xorb	$1, %al
@@ -1390,71 +1463,8 @@ main:                                   # @main
 	movq	$9, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	(%rsp), %rdi
-	movq	72(%rsp), %rsi
-	callq	"_number:1_equality"@PLT
-	xorb	$1, %al
-	movzbl	%al, %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%rbp, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	(%rsp), %rdi
-	movq	24(%rsp), %rsi
-	callq	"_number:1_equality"@PLT
-	xorb	$1, %al
-	movzbl	%al, %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%rbp, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	24(%rsp), %rdi
-	movq	64(%rsp), %rsi
-	callq	"_number:1_equality"@PLT
-	xorb	$1, %al
-	movzbl	%al, %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movq	24(%rsp), %rdi
-	movq	120(%rsp), %rsi
+	movq	32(%rsp), %rdi
+	movq	176(%rsp), %rsi
 	callq	"_number:1_equality"@PLT
 	xorb	$1, %al
 	movzbl	%al, %edi
@@ -1462,7 +1472,7 @@ main:                                   # @main
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
 	andb	$1, %al
-	movb	%al, 51(%rsp)
+	movb	%al, 59(%rsp)
 	movl	$1, %edi
 	callq	malloc@PLT
 	movq	%rax, %r15
@@ -1475,14 +1485,14 @@ main:                                   # @main
 	xorl	%ecx, %ecx
 	xorl	%r8d, %r8d
 	callq	GC_register_finalizer@PLT
-	movq	%rbx, 240(%rsp)
+	movq	%rbx, 304(%rsp)
 	movq	%r15, (%rbx)
 	movq	$1, 8(%rbx)
 	movq	$1, 16(%rbx)
 	movq	$1, 24(%rbx)
-	movq	240(%rsp), %rdi
+	movq	304(%rsp), %rdi
 	callq	"fn23:f"@PLT
-	movq	%rax, 248(%rsp)
+	movq	%rax, 312(%rsp)
 	movl	$8, %edi
 	callq	malloc@PLT
 	movq	%rax, %r15
@@ -1495,7 +1505,7 @@ main:                                   # @main
 	xorl	%ecx, %ecx
 	xorl	%r8d, %r8d
 	callq	GC_register_finalizer@PLT
-	movq	%rbx, 232(%rsp)
+	movq	%rbx, 296(%rsp)
 	movq	%r15, (%rbx)
 	movq	$1, 8(%rbx)
 	movq	$1, 16(%rbx)
@@ -1503,7 +1513,7 @@ main:                                   # @main
 	testb	%al, %al
 	jne	.LBB4_25
 # %bb.23:                               # %array_ref_bound_check_success222
-	movq	232(%rsp), %rax
+	movq	296(%rsp), %rax
 	cmpq	$0, 8(%rax)
 	jle	.LBB4_25
 # %bb.24:                               # %array_ref_bound_check_success222
@@ -1513,7 +1523,7 @@ main:                                   # @main
 	movq	(%rax), %rax
 	movq	"fn24:f"@GOTPCREL(%rip), %rcx
 	movq	%rcx, (%rax)
-	movb	$0, 50(%rsp)
+	movb	$0, 58(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -1531,7 +1541,7 @@ main:                                   # @main
 	callq	lla_print_string@PLT
 	movl	$1, %edi
 	callq	"fn22:f9"@PLT
-	movq	%rax, 312(%rsp)
+	movq	%rax, 376(%rsp)
 	testb	%bpl, %bpl
 	jne	.LBB4_30
 # %bb.28:                               # %array_ref_bound_check_success716
@@ -1561,7 +1571,7 @@ main:                                   # @main
 	movq	$14, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	248(%rsp), %rdi
+	movq	312(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1577,15 +1587,15 @@ main:                                   # @main
 	xorl	%ecx, %ecx
 	xorl	%r8d, %r8d
 	callq	GC_register_finalizer@PLT
-	movq	%rbx, 224(%rsp)
+	movq	%rbx, 288(%rsp)
 	movq	%r15, (%rbx)
 	movq	$1, 8(%rbx)
 	movq	$1, 16(%rbx)
 	movq	$1, 24(%rbx)
-	movq	224(%rsp), %rdi
+	movq	288(%rsp), %rdi
 	callq	"fn25:f10"@PLT
 	andb	$1, %al
-	movb	%al, 49(%rsp)
+	movb	%al, 57(%rsp)
 	movl	$10, %edi
 	callq	"fn27:while_test"@PLT
 	movl	$5, %edi
@@ -1609,56 +1619,56 @@ main:                                   # @main
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
 	andb	$1, %al
-	movb	%al, 48(%rsp)
-	movq	$1, 216(%rsp)
-	movq	$-1, 208(%rsp)
-	movl	$1065353216, 112(%rsp)          # imm = 0x3F800000
-	movl	$-1082130432, 108(%rsp)         # imm = 0xBF800000
+	movb	%al, 56(%rsp)
+	movq	$1, 280(%rsp)
+	movq	$-1, 272(%rsp)
+	movl	$1065353216, 152(%rsp)          # imm = 0x3F800000
+	movl	$-1082130432, 148(%rsp)         # imm = 0xBF800000
 	movl	$1, %edi
 	callq	GC_malloc@PLT
-	movq	%rax, 200(%rsp)
+	movq	%rax, 264(%rsp)
 	movb	$1, (%rax)
-	movq	200(%rsp), %rax
+	movq	264(%rsp), %rax
 	movb	(%rax), %al
-	movb	%al, 23(%rsp)
-	movb	$0, 22(%rsp)
-	movq	$3, 192(%rsp)
-	movq	$-1, 184(%rsp)
-	movq	$2, 176(%rsp)
+	movb	%al, 31(%rsp)
+	movb	$0, 30(%rsp)
+	movq	$3, 256(%rsp)
+	movq	$-1, 248(%rsp)
+	movq	$2, 240(%rsp)
 	movl	$5, %edi
 	movl	$2, %esi
 	callq	_binary_int_division@PLT
-	movq	%rax, 168(%rsp)
-	movl	$1077936128, 104(%rsp)          # imm = 0x40400000
-	movl	$-1082130432, 100(%rsp)         # imm = 0xBF800000
-	movl	$1073741824, 96(%rsp)           # imm = 0x40000000
+	movq	%rax, 232(%rsp)
+	movl	$1077936128, 144(%rsp)          # imm = 0x40400000
+	movl	$-1082130432, 140(%rsp)         # imm = 0xBF800000
+	movl	$1073741824, 136(%rsp)          # imm = 0x40000000
 	movss	.LCPI4_0(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
 	movss	.LCPI4_1(%rip), %xmm1           # xmm1 = mem[0],zero,zero,zero
 	callq	_binary_float_division@PLT
-	movss	%xmm0, 92(%rsp)
-	movq	$1, 160(%rsp)
+	movss	%xmm0, 132(%rsp)
+	movq	$1, 224(%rsp)
 	movss	.LCPI4_0(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
 	movss	.LCPI4_1(%rip), %xmm1           # xmm1 = mem[0],zero,zero,zero
 	callq	lla_pow@PLT
-	movss	%xmm0, 88(%rsp)
+	movss	%xmm0, 128(%rsp)
+	movb	$0, 29(%rsp)
+	movb	$1, 28(%rsp)
+	movb	$0, 27(%rsp)
+	movb	$1, 26(%rsp)
+	movb	$0, 25(%rsp)
+	movb	$1, 24(%rsp)
+	movb	$0, 23(%rsp)
+	movb	$1, 22(%rsp)
 	movb	$0, 21(%rsp)
 	movb	$1, 20(%rsp)
-	movb	$0, 19(%rsp)
-	movb	$1, 18(%rsp)
-	movb	$0, 17(%rsp)
-	movb	$1, 16(%rsp)
-	movb	$0, 15(%rsp)
-	movb	$1, 14(%rsp)
-	movb	$0, 13(%rsp)
-	movb	$1, 12(%rsp)
-	movb	$0, 47(%rsp)
+	movb	$0, 55(%rsp)
 	movl	$8, %edi
 	callq	GC_malloc@PLT
-	movq	%rax, 152(%rsp)
+	movq	%rax, 216(%rsp)
 	movq	$1, (%rax)
-	movq	152(%rsp), %rax
+	movq	216(%rsp), %rax
 	movq	(%rax), %rax
-	movq	%rax, 144(%rsp)
+	movq	%rax, 208(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -1687,7 +1697,7 @@ main:                                   # @main
 	movq	$5, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	216(%rsp), %rdi
+	movq	280(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1705,7 +1715,7 @@ main:                                   # @main
 	movq	$6, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	208(%rsp), %rdi
+	movq	272(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1723,7 +1733,7 @@ main:                                   # @main
 	movq	$7, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movss	112(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
+	movss	152(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
 	callq	lla_print_float@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1741,7 +1751,7 @@ main:                                   # @main
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movss	108(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
+	movss	148(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
 	callq	lla_print_float@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1759,7 +1769,7 @@ main:                                   # @main
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movzbl	23(%rsp), %edi
+	movzbl	31(%rsp), %edi
 	callq	lla_print_bool@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1776,7 +1786,7 @@ main:                                   # @main
 	movq	$9, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movzbl	22(%rsp), %edi
+	movzbl	30(%rsp), %edi
 	callq	lla_print_bool@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1808,7 +1818,7 @@ main:                                   # @main
 	movq	$5, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	192(%rsp), %rdi
+	movq	256(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1825,7 +1835,7 @@ main:                                   # @main
 	movq	$6, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	184(%rsp), %rdi
+	movq	248(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1844,7 +1854,7 @@ main:                                   # @main
 	movq	$5, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	176(%rsp), %rdi
+	movq	240(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1861,7 +1871,7 @@ main:                                   # @main
 	movq	$5, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	168(%rsp), %rdi
+	movq	232(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1879,7 +1889,7 @@ main:                                   # @main
 	movq	$7, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movss	104(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
+	movss	144(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
 	callq	lla_print_float@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1897,7 +1907,7 @@ main:                                   # @main
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movss	100(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
+	movss	140(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
 	callq	lla_print_float@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1915,7 +1925,7 @@ main:                                   # @main
 	movq	$7, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movss	96(%rsp), %xmm0                 # xmm0 = mem[0],zero,zero,zero
+	movss	136(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
 	callq	lla_print_float@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1933,7 +1943,7 @@ main:                                   # @main
 	movq	$7, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movss	92(%rsp), %xmm0                 # xmm0 = mem[0],zero,zero,zero
+	movss	132(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
 	callq	lla_print_float@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1951,7 +1961,7 @@ main:                                   # @main
 	movq	$5, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	160(%rsp), %rdi
+	movq	224(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
@@ -1969,8 +1979,145 @@ main:                                   # @main
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movss	88(%rsp), %xmm0                 # xmm0 = mem[0],zero,zero,zero
+	movss	128(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
 	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	29(%rsp), %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.59(%rip), %r15
+	movq	%r15, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	28(%rsp), %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	27(%rsp), %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r15, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	26(%rsp), %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	25(%rsp), %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r15, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	24(%rsp), %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$9, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	23(%rsp), %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r15, (%rbx)
+	movq	$8, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	22(%rsp), %edi
+	callq	lla_print_bool@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
 	movl	$16, %edi
@@ -1999,7 +2146,6 @@ main:                                   # @main
 	xorl	%ecx, %ecx
 	xorl	%r8d, %r8d
 	callq	GC_register_finalizer@PLT
-	leaq	.Lstr.59(%rip), %r15
 	movq	%r15, (%rbx)
 	movq	$8, 8(%rbx)
 	movq	%rbx, %rdi
@@ -2017,152 +2163,16 @@ main:                                   # @main
 	xorl	%ecx, %ecx
 	xorl	%r8d, %r8d
 	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movzbl	19(%rsp), %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r15, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movzbl	18(%rsp), %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movzbl	17(%rsp), %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r15, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movzbl	16(%rsp), %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movzbl	15(%rsp), %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r15, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movzbl	14(%rsp), %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r13, (%rbx)
-	movq	$9, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movzbl	13(%rsp), %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
-	movq	%r15, (%rbx)
-	movq	$8, 8(%rbx)
-	movq	%rbx, %rdi
-	callq	lla_print_string@PLT
-	movzbl	12(%rsp), %edi
-	callq	lla_print_bool@PLT
-	xorl	%edi, %edi
-	callq	"fn1:nl"@PLT
-	movl	$16, %edi
-	callq	GC_malloc@PLT
-	movq	%rax, %rbx
-	movq	%rax, %rdi
-	movq	%r14, %rsi
-	xorl	%edx, %edx
-	xorl	%ecx, %ecx
-	xorl	%r8d, %r8d
-	callq	GC_register_finalizer@PLT
 	movq	%rbp, (%rbx)
 	movq	$5, 8(%rbx)
 	movq	%rbx, %rdi
 	callq	lla_print_string@PLT
-	movq	144(%rsp), %rdi
+	movq	208(%rsp), %rdi
 	callq	lla_print_int@PLT
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
 	andb	$1, %al
-	movb	%al, 46(%rsp)
+	movb	%al, 54(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -2198,10 +2208,10 @@ main:                                   # @main
 	xorl	%edi, %edi
 	callq	"fn1:nl"@PLT
 	andb	$1, %al
-	movb	%al, 45(%rsp)
+	movb	%al, 53(%rsp)
 	movq	(%r12), %rax
 	movq	$2, 40(%rax)
-	movq	$3, 304(%rsp)
+	movq	$3, 368(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -2219,7 +2229,7 @@ main:                                   # @main
 	movl	$1, %edi
 	callq	"fn35:f"@PLT
 	andb	$1, %al
-	movb	%al, 44(%rsp)
+	movb	%al, 52(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -2274,7 +2284,7 @@ main:                                   # @main
 	movq	%rax, %rdi
 	callq	"fn37:f"@PLT
 	andb	$1, %al
-	movb	%al, 43(%rsp)
+	movb	%al, 51(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -2308,7 +2318,7 @@ main:                                   # @main
 	movq	"fn41:f2"@GOTPCREL(%rip), %rdi
 	callq	"fn39:g"@PLT
 	andb	$1, %al
-	movb	%al, 42(%rsp)
+	movb	%al, 50(%rsp)
 	movl	$16, %edi
 	callq	GC_malloc@PLT
 	movq	%rax, %rbx
@@ -2460,11 +2470,983 @@ main:                                   # @main
 	movq	%rax, %rdi
 	callq	"fn49:pp"@PLT
 	andb	$1, %al
-	movb	%al, 41(%rsp)
-	movq	136(%rsp), %rax                 # 8-byte Reload
+	movb	%al, 49(%rsp)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.102(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$13, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	lla_read_int@PLT
+	movq	%rax, 200(%rsp)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.103(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$15, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	200(%rsp), %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.104(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$14, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	lla_read_bool@PLT
+	andb	$1, %al
+	movb	%al, 19(%rsp)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.105(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$16, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	19(%rsp), %edi
+	callq	lla_print_bool@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.106(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$14, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	lla_read_char@PLT
+	movb	%al, 18(%rsp)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.107(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$16, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movzbl	18(%rsp), %edi
+	callq	lla_print_char@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.108(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$15, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	lla_read_float@PLT
+	movss	%xmm0, 124(%rsp)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.109(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$17, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	124(%rsp), %xmm0                # xmm0 = mem[0],zero,zero,zero
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.110(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$27, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$3, %edi
+	callq	malloc@PLT
+	movq	%rax, %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbx, 168(%rsp)
+	movq	%r15, (%rbx)
+	movq	$3, 8(%rbx)
+	movq	168(%rsp), %rdi
+	callq	lla_read_string@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.111(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$18, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	168(%rsp), %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.112(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$16, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$42, %edi
+	callq	lla_abs@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.113(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$17, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	$-42, %rdi
+	callq	lla_abs@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.114(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$19, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_2(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_fabs@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.115(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$21, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_3(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_fabs@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.116(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$29, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_4(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_sqrt@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.117(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$34, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_5(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_sin@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.118(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$21, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_5(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_cos@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.119(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$21, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_5(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_tan@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.120(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$22, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_5(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_atan@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.121(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$20, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_2(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_exp@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.122(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$20, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_5(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_ln@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.123(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$17, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	lla_pi@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$8, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, 64(%rsp)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.124(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$14, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	64(%rsp), %rax
+	movq	$0, (%rax)
+	movq	64(%rsp), %rax
+	movq	(%rax), %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.125(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$16, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	64(%rsp), %rdi
+	callq	lla_incr@PLT
+	movq	64(%rsp), %rax
+	movq	(%rax), %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.126(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$16, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	64(%rsp), %rdi
+	callq	lla_decr@PLT
+	movq	64(%rsp), %rax
+	movq	(%rax), %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.127(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$26, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$42, %edi
+	callq	lla_float_of_int@PLT
+	callq	lla_print_float@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.128(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$26, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_5(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_int_of_float@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.129(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$17, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_2(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_round@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.130(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$17, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movss	.LCPI4_6(%rip), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	callq	lla_round@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.131(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$24, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$97, %edi
+	callq	lla_int_of_char@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.132(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$22, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$97, %edi
+	callq	lla_char_of_int@PLT
+	movzbl	%al, %edi
+	callq	lla_print_char@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.133(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$22, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.134(%rip), %r13
+	movq	%r13, (%rbx)
+	movq	$6, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_strlen@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.135(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$30, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %r15
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%r15)
+	movq	$6, 8(%r15)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$6, 8(%rbx)
+	movq	%r15, %rdi
+	movq	%rbx, %rsi
+	callq	lla_strcmp@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.136(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$31, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %r15
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%r15)
+	movq	$6, 8(%r15)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.137(%rip), %rbp
+	movq	%rbp, (%rbx)
+	movq	$6, 8(%rbx)
+	movq	%r15, %rdi
+	movq	%rbx, %rsi
+	callq	lla_strcmp@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.138(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$31, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %r15
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbp, (%r15)
+	movq	$6, 8(%r15)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$6, 8(%rbx)
+	movq	%r15, %rdi
+	movq	%rbx, %rsi
+	callq	lla_strcmp@PLT
+	movq	%rax, %rdi
+	callq	lla_print_int@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$6, %edi
+	callq	malloc@PLT
+	movq	%rax, %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbx, 160(%rsp)
+	movq	%r15, (%rbx)
+	movq	$6, 8(%rbx)
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.139(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$41, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	160(%rsp), %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$6, 8(%rbx)
+	movq	%r15, %rdi
+	movq	%rbx, %rsi
+	callq	lla_strcpy@PLT
+	movq	160(%rsp), %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.140(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$64, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$20, %edi
+	callq	malloc@PLT
+	movq	%rax, %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbx, 112(%rsp)
+	movq	%r15, (%rbx)
+	movq	$20, 8(%rbx)
+	movq	112(%rsp), %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$6, 8(%rbx)
+	movq	%r15, %rdi
+	movq	%rbx, %rsi
+	callq	lla_strcpy@PLT
+	movq	112(%rsp), %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.141(%rip), %rbp
+	movq	%rbp, (%rbx)
+	movq	$7, 8(%rbx)
+	movq	%r15, %rdi
+	movq	%rbx, %rsi
+	callq	lla_strcat@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.142(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$63, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	112(%rsp), %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.143(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$65, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movl	$1, %edi
+	callq	malloc@PLT
+	movq	%rax, %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbx, 104(%rsp)
+	movq	%r15, (%rbx)
+	movq	$1, 8(%rbx)
+	movq	104(%rsp), %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%r13, (%rbx)
+	movq	$6, 8(%rbx)
+	movq	%r15, %rdi
+	movq	%rbx, %rsi
+	callq	lla_strcpy@PLT
+	movq	104(%rsp), %r15
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	movq	%rbp, (%rbx)
+	movq	$7, 8(%rbx)
+	movq	%r15, %rdi
+	movq	%rbx, %rsi
+	callq	lla_strcat@PLT
+	movl	$16, %edi
+	callq	GC_malloc@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	movq	%r14, %rsi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorl	%r8d, %r8d
+	callq	GC_register_finalizer@PLT
+	leaq	.Lstr.144(%rip), %rax
+	movq	%rax, (%rbx)
+	movq	$62, 8(%rbx)
+	movq	%rbx, %rdi
+	callq	lla_print_string@PLT
+	movq	104(%rsp), %rdi
+	callq	lla_print_string@PLT
+	xorl	%edi, %edi
+	callq	"fn1:nl"@PLT
+	andb	$1, %al
+	movb	%al, 48(%rsp)
+	movq	192(%rsp), %rax                 # 8-byte Reload
 	movq	%rax, (%r12)
 	xorl	%eax, %eax
-	addq	$408, %rsp                      # imm = 0x198
+	addq	$472, %rsp                      # imm = 0x1D8
 	.cfi_def_cfa_offset 56
 	popq	%rbx
 	.cfi_def_cfa_offset 48
@@ -2480,7 +3462,7 @@ main:                                   # @main
 	.cfi_def_cfa_offset 8
 	retq
 .LBB4_4:                                # %array_ref_bound_check_failed.preheader
-	.cfi_def_cfa_offset 464
+	.cfi_def_cfa_offset 528
 	leaq	.Lstr.15(%rip), %rbx
 	.p2align	4, 0x90
 .LBB4_5:                                # %array_ref_bound_check_failed
@@ -6471,5 +7453,220 @@ display_array:
 .Lstr.101:
 	.asciz	"T2 T2 T1 = "
 	.size	.Lstr.101, 12
+
+	.type	.Lstr.102,@object               # @str.102
+.Lstr.102:
+	.asciz	"Insert int: "
+	.size	.Lstr.102, 13
+
+	.type	.Lstr.103,@object               # @str.103
+.Lstr.103:
+	.asciz	"Inserted int: "
+	.size	.Lstr.103, 15
+
+	.type	.Lstr.104,@object               # @str.104
+.Lstr.104:
+	.asciz	"Insert bool: "
+	.size	.Lstr.104, 14
+
+	.type	.Lstr.105,@object               # @str.105
+.Lstr.105:
+	.asciz	"Inserted bool: "
+	.size	.Lstr.105, 16
+
+	.type	.Lstr.106,@object               # @str.106
+.Lstr.106:
+	.asciz	"Insert char: "
+	.size	.Lstr.106, 14
+
+	.type	.Lstr.107,@object               # @str.107
+.Lstr.107:
+	.asciz	"Inserted char: "
+	.size	.Lstr.107, 16
+
+	.type	.Lstr.108,@object               # @str.108
+.Lstr.108:
+	.asciz	"Insert float: "
+	.size	.Lstr.108, 15
+
+	.type	.Lstr.109,@object               # @str.109
+.Lstr.109:
+	.asciz	"Inserted float: "
+	.size	.Lstr.109, 17
+
+	.type	.Lstr.110,@object               # @str.110
+.Lstr.110:
+	.asciz	"Insert string of 3 chars: "
+	.size	.Lstr.110, 27
+
+	.type	.Lstr.111,@object               # @str.111
+.Lstr.111:
+	.asciz	"Inserted string: "
+	.size	.Lstr.111, 18
+
+	.type	.Lstr.112,@object               # @str.112
+.Lstr.112:
+	.asciz	"42 = abs(42) = "
+	.size	.Lstr.112, 16
+
+	.type	.Lstr.113,@object               # @str.113
+.Lstr.113:
+	.asciz	"42 = abs(-42) = "
+	.size	.Lstr.113, 17
+
+	.type	.Lstr.114,@object               # @str.114
+.Lstr.114:
+	.asciz	"4.2 = fabs(4.2) = "
+	.size	.Lstr.114, 19
+
+	.type	.Lstr.115,@object               # @str.115
+.Lstr.115:
+	.asciz	"4.2 = fabs(-.4.2) = "
+	.size	.Lstr.115, 21
+
+	.type	.Lstr.116,@object               # @str.116
+.Lstr.116:
+	.asciz	"42.0 = sqrt(42.0 *. 42.0) = "
+	.size	.Lstr.116, 29
+
+	.type	.Lstr.117,@object               # @str.117
+.Lstr.117:
+	.asciz	"-0.91 = sin(42.0 (in radians)) = "
+	.size	.Lstr.117, 34
+
+	.type	.Lstr.118,@object               # @str.118
+.Lstr.118:
+	.asciz	"-0.39 = cos(42.0) = "
+	.size	.Lstr.118, 21
+
+	.type	.Lstr.119,@object               # @str.119
+.Lstr.119:
+	.asciz	"2.291 = tan(42.0) = "
+	.size	.Lstr.119, 21
+
+	.type	.Lstr.120,@object               # @str.120
+.Lstr.120:
+	.asciz	"1.546 = atan(42.0) = "
+	.size	.Lstr.120, 22
+
+	.type	.Lstr.121,@object               # @str.121
+.Lstr.121:
+	.asciz	"66.68 = exp(4.2) = "
+	.size	.Lstr.121, 20
+
+	.type	.Lstr.122,@object               # @str.122
+.Lstr.122:
+	.asciz	"3.737 = ln(42.0) = "
+	.size	.Lstr.122, 20
+
+	.type	.Lstr.123,@object               # @str.123
+.Lstr.123:
+	.asciz	"3.1415 = pi() = "
+	.size	.Lstr.123, 17
+
+	.type	.Lstr.124,@object               # @str.124
+.Lstr.124:
+	.asciz	"Initial cnt: "
+	.size	.Lstr.124, 14
+
+	.type	.Lstr.125,@object               # @str.125
+.Lstr.125:
+	.asciz	"Increment cnt: "
+	.size	.Lstr.125, 16
+
+	.type	.Lstr.126,@object               # @str.126
+.Lstr.126:
+	.asciz	"Decrement cnt: "
+	.size	.Lstr.126, 16
+
+	.type	.Lstr.127,@object               # @str.127
+.Lstr.127:
+	.asciz	"42.0 = float_of_int 42 = "
+	.size	.Lstr.127, 26
+
+	.type	.Lstr.128,@object               # @str.128
+.Lstr.128:
+	.asciz	"42 = int_of_float 42.0 = "
+	.size	.Lstr.128, 26
+
+	.type	.Lstr.129,@object               # @str.129
+.Lstr.129:
+	.asciz	"4 = round 4.2 = "
+	.size	.Lstr.129, 17
+
+	.type	.Lstr.130,@object               # @str.130
+.Lstr.130:
+	.asciz	"5 = round 4.5 = "
+	.size	.Lstr.130, 17
+
+	.type	.Lstr.131,@object               # @str.131
+.Lstr.131:
+	.asciz	"97 = int_of_char 'a' = "
+	.size	.Lstr.131, 24
+
+	.type	.Lstr.132,@object               # @str.132
+.Lstr.132:
+	.asciz	"a = char_of_int 97 = "
+	.size	.Lstr.132, 22
+
+	.type	.Lstr.133,@object               # @str.133
+.Lstr.133:
+	.asciz	"5 = strlen \"hello\" = "
+	.size	.Lstr.133, 22
+
+	.type	.Lstr.134,@object               # @str.134
+.Lstr.134:
+	.asciz	"hello"
+	.size	.Lstr.134, 6
+
+	.type	.Lstr.135,@object               # @str.135
+.Lstr.135:
+	.asciz	"0 = strcmp \"hello\" \"hello\" = "
+	.size	.Lstr.135, 30
+
+	.type	.Lstr.136,@object               # @str.136
+.Lstr.136:
+	.asciz	"<0 = strcmp \"hello\" \"world\" = "
+	.size	.Lstr.136, 31
+
+	.type	.Lstr.137,@object               # @str.137
+.Lstr.137:
+	.asciz	"world"
+	.size	.Lstr.137, 6
+
+	.type	.Lstr.138,@object               # @str.138
+.Lstr.138:
+	.asciz	">0 = strcmp \"world\" \"hello\" = "
+	.size	.Lstr.138, 31
+
+	.type	.Lstr.139,@object               # @str.139
+.Lstr.139:
+	.asciz	"dest = \"\"; str_cpy dest \"hello\"; dest = "
+	.size	.Lstr.139, 41
+
+	.type	.Lstr.140,@object               # @str.140
+.Lstr.140:
+	.asciz	"normal behaviour of strcpy and strcat with enough buffer size:\n"
+	.size	.Lstr.140, 64
+
+	.type	.Lstr.141,@object               # @str.141
+.Lstr.141:
+	.asciz	" world"
+	.size	.Lstr.141, 7
+
+	.type	.Lstr.142,@object               # @str.142
+.Lstr.142:
+	.asciz	" dest [20], strcpy dest \"hello\", strcat dest \" world\", dest = "
+	.size	.Lstr.142, 63
+
+	.type	.Lstr.143,@object               # @str.143
+.Lstr.143:
+	.asciz	"undefined behaviour of strcpy and strcat with less buffer size:\n"
+	.size	.Lstr.143, 65
+
+	.type	.Lstr.144,@object               # @str.144
+.Lstr.144:
+	.asciz	" dest [1], strcpy dest \"hello\", strcat dest \" world\", dest = "
+	.size	.Lstr.144, 62
 
 	.section	".note.GNU-stack","",@progbits
