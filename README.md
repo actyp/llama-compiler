@@ -193,4 +193,59 @@ clang -c external_functions.c
 ar -cvq liblla.a external_functions.o
 ```
 
+> The external functions that are implemented in **liblla.a** having the prefix *lla_* and provided in the language without that prefix are:
+
+#### **I/O functions**
+
+* `print_int`    : int           -> unit
+* `print_bool`   : bool          -> unit
+* `print_char`   : char          -> unit
+* `print_float`  : float         -> unit
+* `print_string` : array of char -> unit
+* `read_int`     : unit          -> int
+* `read_bool`    : unit          -> bool
+* `read_char`    : unit          -> char
+* `read_float`   : unit          -> float
+* `read_string`  : array of char -> unit
+
+> `read_string` **stores** the read string in the first parameter provided
+
+##### **Mathematical functions**
+
+* `abs`  : int   -> int
+* `fabs` : float -> float
+* `sqrt` : float -> float
+* `sin`  : float -> float
+* `cos`  : float -> float
+* `tan`  : float -> float
+* `atan` : float -> float
+* `exp`  : float -> float
+* `ln`   : float -> float
+* `pi`   : unit  -> float
+
+> The parameter in `sin`, `cos`, `tan`, `atan` should be in **radians**
+
+#### **Increment functions**
+
+* `incr` : int ref -> unit
+* `decr` : int ref -> unit
+
+#### **Conversion functions**
+
+* `float_of_int` : int   -> float
+* `int_of_float` : float -> int
+* `round`        : float -> int
+* `int_of_char`  : char  -> int
+* `char_of_int`  : int   -> char
+
+#### **String Management functions**
+
+* `strlen` : array of char -> int
+* `strcmp` : array of char -> array of char -> int
+* `strcpy` : array of char -> array of char -> unit
+* `strcat` : array of char -> array of char -> unit
+
+> All these have the same functionality as in C language, so `strcpy dest src` and `strcat dest src` have the problem of inadequate sized destination array
+
+
 > Examples of programs and generated files can be found at [**examples/programs**](./examples/programs) directory
