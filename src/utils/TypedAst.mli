@@ -69,7 +69,7 @@ type venv = T.ty_symboltable
 (** [tenv] is a mapping from type variables to types *)
 and tenv = T.ty_symboltable
 
-(** [env_tast] is the tast but every def node is accompanied by it's starting venv and tenv *)
+(** [env_tast] is the tast but every def node is accompanied by its starting venv and tenv *)
 and env_tast = (venv * tenv * def) list
 
 (** [tast_from_env_tast env_tast] returns the tast from [env_tast] *)

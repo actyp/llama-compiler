@@ -139,7 +139,7 @@ let frame_types_display_array: (L.lltype array) ref = ref [||]
 (** [build_display_array info_tbl] initializes [display array] struct and [frame_types_display_array] 
     with size equal to the max declaration depth of the functions in [info_tbl]. Display array struct
     is an array of generic frame pointers. On function call, the called function saves the old frame
-    pointer at index equal to it's declaration depth, stores it's frame pointer -- casted to i8* --
+    pointer at index equal to its declaration depth, stores its frame pointer -- casted to i8* --
     and on return restores the old generic frame pointer *)
 let build_display_array info_tbl =
   let max_func_dec_depth = 
@@ -187,7 +187,7 @@ let rec llname_userdef_of_userdef_ty = function
   | T.USERDEF (name_sym, occ_num) -> (S.name name_sym) ^ ":" ^ (string_of_int occ_num)
   | _ -> internal_error_of_msg_format None "USERDEF" "other type" "llname_userdef_of_userdef_ty" "type"
 
-(** [llname_constr_of_constr_info name_sym userdef_ty] returns the full name of a constructor from it's [name_sym]
+(** [llname_constr_of_constr_info name_sym userdef_ty] returns the full name of a constructor from its [name_sym]
     and [userdef_ty], which is 'userdef_ty_name:occ_num:constr_name' *)
 and llname_constr_of_constr_info name_sym userdef_ty =
   let userdef_ty_name =  llname_userdef_of_userdef_ty userdef_ty in
@@ -423,7 +423,7 @@ and build_gc_malloc lltype name casted_res array_size_opt =
 
 (** [build_gc_register_finalizer gc_malloc_ptr] registers the function [_free_array_of_malloc] as finalizer at [gc_malloc_ptr].
     The provided [gc_malloc_ptr] is only useful when the cast to {i8*, i64}* can be performed. The [_free_array_of_malloc]
-    function will cast the [gc_malloc_ptr] to {i8*, i64}* and take it's i8*. This pointer should point at non-garbage-collected
+    function will cast the [gc_malloc_ptr] to {i8*, i64}* and take its i8*. This pointer should point at non-garbage-collected
     heap allocated with normal malloc *)
 and build_gc_register_finalizer gc_malloc_ptr =
   let func = find_function_in_module "GC_register_finalizer" in
@@ -433,8 +433,8 @@ and build_gc_register_finalizer gc_malloc_ptr =
   let null_func_ptr_ptr = free_func |> L.type_of |> L.pointer_type |> L.const_null in
   ignore(L.build_call func [| gc_malloc_ptr; free_func; null_ptr; null_func_ptr_ptr; null_ptr_ptr |] "" builder)
 
-(** [build_func_frame_vars name_sym func_ty info_tbl] declares the function if needed, builds it's basic blocks,
-    builds it's function frame with escaping variables, allocates it's local variables in entry block *)
+(** [build_func_frame_vars name_sym func_ty info_tbl] declares the function if needed, builds its basic blocks,
+    builds its function frame with escaping variables, allocates its local variables in entry block *)
 and build_func_frame_vars name_sym func_ty info_tbl =
   let func_internal_error expected found name_sym =
     internal_error_of_msg_format None expected found "build_func_frame_vars" (S.name name_sym)
@@ -448,7 +448,7 @@ and build_func_frame_vars name_sym func_ty info_tbl =
   let build_frame_alloc esc_list =
     let prev_frame_ptr = load_from_display_array func_dec_depth in
     let esc_list_lltypes = List.map (fun (_, ty) -> lltype_of_ty ty) esc_list in
-    (* allocate new frame in stack, because it won't outlive it's function *)
+    (* allocate new frame in stack, because it won't outlive its function *)
     let frame_type = struct_type (Array.of_list esc_list_lltypes) in
     let frame_ptr = L.build_alloca frame_type (S.name name_sym ^ ":frame_ptr") builder in
     (* store frame_ptr to display array *)
@@ -508,7 +508,7 @@ and find_llvalue_ptr name_sym current_depth info_tbl on_call =
   | Some Esc.LocalVarInfo { ty; llvalue_opt } ->
     (* assuming info_tbl is correct, a local is found only in local scope while parsing *)
     begin match llvalue_opt with
-    | None -> func_internal_error "local" "None" (* should have been allocated on it's function entry block *)
+    | None -> func_internal_error "local" "None" (* should have been allocated on its function entry block *)
     | Some llvalue_ptr -> match ty with
       (* llvalue_ptr is function pointer so if on_call load function else return function pointer *)
       | T.FUNC _ -> if on_call then L.build_load llvalue_ptr "function_param_temp_load" builder else llvalue_ptr
@@ -524,7 +524,7 @@ and find_llvalue_ptr name_sym current_depth info_tbl on_call =
       | _ -> load_ptr
 
 (** [build_func_return ret_llvalue] generates ir for the return expression of current function, returning value [ret_llvalue] 
-    and pops it's function frame from [function_frames] *)
+    and pops its function frame from [function_frames] *)
 and build_func_return (func_dec_depth, prev_frame_ptr) ret_llvalue =
   store_to_display_array func_dec_depth prev_frame_ptr;
   ignore(L.build_ret ret_llvalue builder)
@@ -819,7 +819,7 @@ and create_named_type_structs_and_equality_fun (TA.TypeDec { name_sym; constrs }
         and add a case for every constructor in the current type *)
     let switch = L.build_switch s1_tag error_block (List.length constrs) builder in
     
-    (* create case and basic_block for every constructor and fill it's basic block *)
+    (* create case and basic_block for every constructor and fill its basic block *)
     let add_constr_to_switch (TA.Constr { ty; name_sym; index }) =
       let constr_name = llname_constr_of_constr_info name_sym userdef_ty in
       let constr_struct_pointer_lltype = match tbl_find_opt constr_info_tbl constr_name with
@@ -992,7 +992,7 @@ and generate_ir_expr depth info_tbl expr: L.llvalue =
   | TA.E_Char { ty; value } -> 
     L.const_int (lltype_of_ty ty) (int_of_char value)
   | TA.E_String  { ty; value } ->
-    (* create or get char array pointer and create it's size *)
+    (* create or get char array pointer and create its size *)
     let array_ptr = get_or_build_global_string_pointer value in
     let str_size_with_zeros = String.length value + 1 in
     let array_size = const_int str_size_with_zeros in

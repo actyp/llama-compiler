@@ -59,7 +59,7 @@ let add_fun_to_tbl (tbl: info_tbl_t) name_sym ty dec_depth local_list esc_list =
   tbl_add tbl name_sym entry
 
 (** [add_var_to_func_list tbl func_sym (name_sym, ty)] obtains the [FuncInfo] from [tbl]
-    associated to [func_sym] and adds to front of it's [local_list] the tuple [(name_sym, ty)] *)
+    associated to [func_sym] and adds to front of its [local_list] the tuple [(name_sym, ty)] *)
 let add_var_to_func_list (tbl: info_tbl_t) func_sym (name_sym, ty) =
   let new_var = (name_sym, ty) in
   match tbl_find_opt tbl func_sym with
