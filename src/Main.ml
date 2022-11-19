@@ -10,10 +10,10 @@ let usage_msg = Printf.sprintf "Usage: %s [-flag] [--option] filename[.ext]\n\n%
 
 let line_output_of_sys_cmd cmd = Unix.open_process_in cmd |> input_line
 
-(** llc exetutable *)
+(** llc executable *)
 let llc_exe = line_output_of_sys_cmd "which llc"
 
-(** clang exetutable *)
+(** clang executable *)
 and clang_exe = line_output_of_sys_cmd "which clang"
 
 (** runtime library files with absolute path *)
